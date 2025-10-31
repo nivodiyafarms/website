@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Image as ImageIcon, X, Trash2 } from 'lucide-react';
+import { Send, Image as ImageIcon, X, Trash2, Mic } from 'lucide-react';
 import api from '../services/api';
+import VoiceRecorder from './VoiceRecorder';
 
 const NotesInterface = ({ cropCycleId }) => {
   const [notes, setNotes] = useState([]);
@@ -92,6 +93,32 @@ const NotesInterface = ({ cropCycleId }) => {
       alert('Failed to create note');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVoiceRecordingComplete = async (blob) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', blob, 'recording.wav');
+      
+      // Use the voice upload endpoint to transcribe
+      const response = await fetch('http://localhost:8000/crop-cycle-incidents/' + cropCycleId + '/tasks/voice/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+      
+      const result = await response.json();
+      
+      if (result.transcript) {
+        // Append transcript to the existing text in the field
+        setNewNote(prev => (prev + ' ' + result.transcript).trim());
+      }
+    } catch (error) {
+      console.error('Failed to process voice recording:', error);
+      alert('Failed to process voice recording. Please try again.');
     }
   };
 
@@ -248,13 +275,20 @@ const NotesInterface = ({ cropCycleId }) => {
 
           {/* Input Row */}
           <div className="flex items-end space-x-2">
-            <div className="flex-1">
+            <div className="flex-1 relative">
               <textarea
                 value={newNote}
                 onChange={(e) => setNewNote(e.target.value)}
                 placeholder="Type a note..."
                 rows="2"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                disabled={loading}
+              />
+              <VoiceRecorder
+                onRecordingComplete={handleVoiceRecordingComplete}
+                customButton={true}
+                buttonClassName="absolute top-2 right-2 p-2 rounded-lg transition"
+                iconClassName="w-5 h-5"
                 disabled={loading}
               />
             </div>

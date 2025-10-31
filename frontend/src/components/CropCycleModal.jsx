@@ -41,6 +41,36 @@ const CropCycleModal = ({ isOpen, onClose, onSubmit, fields, supervisors, editin
     onSubmit(formData);
   };
 
+  // Voice recording handler for textareas
+  const handleVoiceRecordingComplete = async (blob, fieldName) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', blob, 'recording.wav');
+      
+      // Use the voice upload endpoint to transcribe
+      const response = await fetch('http://localhost:8000/crop-cycle-incidents/temp/tasks/voice/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+      
+      const result = await response.json();
+      
+      if (result.transcript) {
+        // Append transcript to the existing text in the field
+        setFormData(prev => ({
+          ...prev,
+          [fieldName]: (prev[fieldName] + ' ' + result.transcript).trim()
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to process voice recording:', error);
+      alert('Failed to process voice recording. Please try again.');
+    }
+  };
+
   const stages = [
     'SOWING', 'GERMINATION', 'VEGETATIVE', 'FLOWERING',
     'FRUITING', 'HARVEST', 'STORAGE', 'SALE', 'PAYMENT'
@@ -254,13 +284,21 @@ const CropCycleModal = ({ isOpen, onClose, onSubmit, fields, supervisors, editin
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Description (Detailed 5-8 lines)
                   </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    rows="5"
-                    placeholder="Detailed description of the crop cycle, plans, and expectations..."
-                  ></textarea>
+                  <div className="relative">
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                      rows="5"
+                      placeholder="Detailed description of the crop cycle, plans, and expectations..."
+                    ></textarea>
+                    <VoiceRecorder
+                      onRecordingComplete={(blob) => handleVoiceRecordingComplete(blob, 'description')}
+                      customButton={true}
+                      buttonClassName="absolute top-2 right-2 p-2 rounded-lg transition"
+                      iconClassName="w-5 h-5"
+                    />
+                  </div>
                 </div>
 
                 {/* Notes */}
@@ -268,13 +306,21 @@ const CropCycleModal = ({ isOpen, onClose, onSubmit, fields, supervisors, editin
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Notes (Free text, misc info)
                   </label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    rows="3"
-                    placeholder="Any additional notes, warnings, or miscellaneous information..."
-                  ></textarea>
+                  <div className="relative">
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                      rows="3"
+                      placeholder="Any additional notes, warnings, or miscellaneous information..."
+                    ></textarea>
+                    <VoiceRecorder
+                      onRecordingComplete={(blob) => handleVoiceRecordingComplete(blob, 'notes')}
+                      customButton={true}
+                      buttonClassName="absolute top-2 right-2 p-2 rounded-lg transition"
+                      iconClassName="w-5 h-5"
+                    />
+                  </div>
                 </div>
               </div>
 

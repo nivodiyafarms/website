@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any
-from app.models.field import SoilType
+from app.models.field import SoilType, OwnershipType
 
 
 class FieldCreate(BaseModel):
@@ -12,6 +12,9 @@ class FieldCreate(BaseModel):
     gps_centroid_lat: Optional[float] = None
     gps_centroid_lng: Optional[float] = None
     village: Optional[str] = None
+    ownership: Optional[str] = None
+    gavn: Optional[str] = None
+    farm_id: Optional[str] = None
 
 
 class FieldUpdate(BaseModel):
@@ -22,6 +25,9 @@ class FieldUpdate(BaseModel):
     gps_centroid_lat: Optional[float] = None
     gps_centroid_lng: Optional[float] = None
     village: Optional[str] = None
+    ownership: Optional[str] = None
+    gavn: Optional[str] = None
+    farm_id: Optional[str] = None
 
 
 class FieldResponse(BaseModel):
@@ -33,6 +39,9 @@ class FieldResponse(BaseModel):
     gps_centroid_lat: Optional[float]
     gps_centroid_lng: Optional[float]
     village: Optional[str]
+    ownership: Optional[str]
+    gavn: Optional[str]
+    farm_id: Optional[str]
 
     class Config:
         from_attributes = True

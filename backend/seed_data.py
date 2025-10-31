@@ -8,7 +8,6 @@ from app.models.field import Field, SoilType
 from app.models.crop_catalog import CropCatalog
 from app.models.material import Material, MaterialCategory
 from app.models.equipment import Equipment, EquipmentType
-from app.models.incident import Incident  # Import to ensure table creation
 from app.auth.security import get_password_hash
 
 
@@ -16,7 +15,7 @@ def seed_database():
     # Create all tables
     print("Creating database tables...")
     Base.metadata.create_all(bind=engine)
-    print("✓ Tables created\n")
+    print("SUCCESS: Tables created\n")
     db = SessionLocal()
     
     try:

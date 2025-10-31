@@ -5,8 +5,6 @@ import PrivateRoute from './utils/PrivateRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Incident from './pages/Incident';
-import IncidentsNew from './pages/IncidentsNew';
 import CropCycleManagementComplete from './pages/CropCycleManagementComplete';
 
 function App() {
@@ -21,26 +19,6 @@ function App() {
               <PrivateRoute>
                 <Layout>
                   <Dashboard />
-                </Layout>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/incidents"
-            element={
-              <PrivateRoute>
-                <Layout>
-                  <IncidentsNew />
-                </Layout>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/crop-cycles"
-            element={
-              <PrivateRoute>
-                <Layout>
-                  <Incident />
                 </Layout>
               </PrivateRoute>
             }

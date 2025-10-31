@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.database import engine, Base
-from app.api import auth, users, fields, crop_cycles, crops, materials, equipment, incidents, crop_cycle_incidents, crop_cycle_notes
+from app.api import auth, users, fields, crop_cycles, crops, materials, equipment, crop_cycle_incidents, crop_cycle_notes, chatbot
 import os
 
 # Create database tables
@@ -35,9 +35,9 @@ app.include_router(crop_cycles.router)
 app.include_router(crops.router)
 app.include_router(materials.router)
 app.include_router(equipment.router)
-app.include_router(incidents.router)
 app.include_router(crop_cycle_incidents.router)
 app.include_router(crop_cycle_notes.router)
+app.include_router(chatbot.router)
 
 
 @app.get("/")

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LayoutDashboard, FileText, Sprout, LogOut, Menu, X, Wheat, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, FileText, Sprout, LogOut, Menu, X, Wheat } from 'lucide-react';
 
 const Layout = ({ children }) => {
   const { user, logout } = useAuth();
@@ -16,7 +16,6 @@ const Layout = ({ children }) => {
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/incidents', icon: AlertCircle, label: 'Incidents' },
     { path: '/crop-cycle-management', icon: Wheat, label: 'Crop Cycles', badge: 'NEW' },
   ];
 

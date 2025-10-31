@@ -1,13 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Square, Play, Pause, Upload, Loader } from 'lucide-react';
+import { Mic, MicOff, Square, Play, Pause, Upload, Loader } from 'lucide-react';
 
-const VoiceRecorder = ({ onRecordingComplete, userId }) => {
-  const [isRecording, setIsRecording] = useState(false);
+const VoiceRecorder = ({ 
+  onRecordingComplete, 
+  userId, 
+  isRecording, 
+  onRecordingChange, 
+  disabled = false,
+  customButton = false,
+  buttonClassName = "",
+  iconClassName = "w-5 h-5"
+}) => {
+  const [internalIsRecording, setInternalIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [audioURL, setAudioURL] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // Use external isRecording state if provided, otherwise use internal
+  const currentIsRecording = isRecording !== undefined ? isRecording : internalIsRecording;
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -26,6 +38,25 @@ const VoiceRecorder = ({ onRecordingComplete, userId }) => {
       }
     };
   }, []);
+
+  // Auto-process audio when recording stops (for custom button mode)
+  useEffect(() => {
+    if (audioURL && customButton && onRecordingComplete) {
+      // Convert blob URL to actual blob and process
+      fetch(audioURL)
+        .then(response => response.blob())
+        .then(blob => {
+          onRecordingComplete(blob);
+          // Reset after processing
+          setAudioURL(null);
+          setRecordingTime(0);
+          audioChunksRef.current = [];
+        })
+        .catch(error => {
+          console.error('Error processing audio:', error);
+        });
+    }
+  }, [audioURL, customButton, onRecordingComplete]);
 
   const startRecording = async () => {
     try {
@@ -49,7 +80,11 @@ const VoiceRecorder = ({ onRecordingComplete, userId }) => {
       };
 
       mediaRecorder.start();
-      setIsRecording(true);
+      if (onRecordingChange) {
+        onRecordingChange(true);
+      } else {
+        setInternalIsRecording(true);
+      }
       setRecordingTime(0);
 
       // Start timer
@@ -63,9 +98,13 @@ const VoiceRecorder = ({ onRecordingComplete, userId }) => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && currentIsRecording) {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
+      if (onRecordingChange) {
+        onRecordingChange(false);
+      } else {
+        setInternalIsRecording(false);
+      }
       setIsPaused(false);
       
       if (streamRef.current) {
@@ -79,7 +118,7 @@ const VoiceRecorder = ({ onRecordingComplete, userId }) => {
   };
 
   const pauseRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && currentIsRecording) {
       if (isPaused) {
         mediaRecorderRef.current.resume();
         timerRef.current = setInterval(() => {
@@ -144,6 +183,37 @@ const VoiceRecorder = ({ onRecordingComplete, userId }) => {
     audioChunksRef.current = [];
   };
 
+  const handleButtonClick = () => {
+    if (disabled) return;
+    
+    if (currentIsRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  // If custom button mode, just return the button
+  if (customButton) {
+    return (
+      <button
+        onClick={handleButtonClick}
+        disabled={disabled}
+        className={`${buttonClassName} ${
+          currentIsRecording 
+            ? 'bg-red-100 text-red-600' 
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        }`}
+      >
+        {currentIsRecording ? (
+          <MicOff className={iconClassName} />
+        ) : (
+          <Mic className={iconClassName} />
+        )}
+      </button>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Instructions */}
@@ -160,9 +230,9 @@ const VoiceRecorder = ({ onRecordingComplete, userId }) => {
       <div className="bg-gray-50 rounded-lg p-8 text-center">
         <div className="flex items-center justify-center mb-6">
           <div className={`w-32 h-32 rounded-full flex items-center justify-center ${
-            isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-300'
+            currentIsRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-300'
           }`}>
-            <Mic className={`w-16 h-16 ${isRecording ? 'text-white' : 'text-gray-600'}`} />
+            <Mic className={`w-16 h-16 ${currentIsRecording ? 'text-white' : 'text-gray-600'}`} />
           </div>
         </div>
 
@@ -172,7 +242,7 @@ const VoiceRecorder = ({ onRecordingComplete, userId }) => {
 
         {/* Recording Controls */}
         <div className="flex items-center justify-center space-x-4">
-          {!isRecording && !audioURL && (
+          {!currentIsRecording && !audioURL && (
             <button
               onClick={startRecording}
               className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-semibold transition shadow-lg"
@@ -182,7 +252,7 @@ const VoiceRecorder = ({ onRecordingComplete, userId }) => {
             </button>
           )}
 
-          {isRecording && (
+          {currentIsRecording && (
             <>
               <button
                 onClick={pauseRecording}

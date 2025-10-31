@@ -83,23 +83,6 @@ export const equipmentAPI = {
   create: (equipmentData) => api.post('/api/equipment/', equipmentData),
 };
 
-// Incident APIs
-export const incidentAPI = {
-  getAll: (params) => api.get('/incidents/', { params }),
-  getById: (id) => api.get(`/incidents/${id}`),
-  createManual: (incidentData) => api.post('/incidents/manual', incidentData),
-  uploadVoice: (formData) => {
-    return api.post('/incidents/voice/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-  },
-  confirmVoice: (data) => api.post('/incidents/voice/confirm', data),
-  update: (id, incidentData) => api.put(`/incidents/${id}`, incidentData),
-  delete: (id) => api.delete(`/incidents/${id}`),
-};
-
 // Crop Cycle Incident APIs
 export const cropCycleIncidentAPI = {
   // Crop Cycles (Parent)

@@ -12,6 +12,11 @@ class SoilType(str, enum.Enum):
     LOAM = "LOAM"
 
 
+class OwnershipType(str, enum.Enum):
+    SELF = "Self"
+    OTHER = "Other"
+
+
 class Field(Base):
     __tablename__ = "fields"
 
@@ -23,4 +28,7 @@ class Field(Base):
     gps_centroid_lat = Column(Float, nullable=True)
     gps_centroid_lng = Column(Float, nullable=True)
     village = Column(String(100), nullable=True)
+    ownership = Column(String(50), nullable=True)  # "Self" or "Other"
+    gavn = Column(String(100), nullable=True)  # Town/Village name
+    farm_id = Column(String(100), nullable=True)  # Farm ID from CSV
 

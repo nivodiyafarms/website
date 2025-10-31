@@ -216,17 +216,6 @@ const Dashboard = () => {
               <ArrowRight className="w-5 h-5 text-primary-600 group-hover:translate-x-1 transition-transform" />
             </button>
             
-            <button
-              onClick={() => navigate('/incidents')}
-              className="w-full flex items-center justify-between p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition group"
-            >
-              <div className="flex items-center space-x-3">
-                <Activity className="w-6 h-6 text-blue-600" />
-                <span className="font-medium text-gray-900">Report Incident</span>
-              </div>
-              <ArrowRight className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform" />
-            </button>
-
             <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">System Summary</span>

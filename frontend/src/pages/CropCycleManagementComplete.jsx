@@ -468,109 +468,71 @@ const CropCycleManagementComplete = () => {
           )}
         </div>
 
-        {/* Tasks & Work Orders Tabs */}
-        <div className="bg-white rounded-lg shadow-lg">
-          <div className="flex border-b">
-            <div className="flex-1 p-6 border-r">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-gray-900">📋 Tasks & Activities</h3>
-                <button
-                  onClick={handleCreateTask}
-                  className="flex items-center space-x-2 bg-primary-600 hover:bg-primary-700 text-white px-3 py-2 rounded-lg transition text-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Task</span>
-                </button>
-              </div>
-
-              {tasks.length === 0 ? (
-                <div className="text-center py-8">
-                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-500 text-sm">No tasks yet</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {tasks.map((task) => (
-                    <div
-                      key={task.task_id}
-                      onClick={() => handleOpenTask(task)}
-                      className="p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition cursor-pointer"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <h4 className="font-semibold text-gray-900 text-sm">{task.short_description}</h4>
-                          {task.is_voice_recorded === 'true' && (
-                            <Mic className="w-3 h-3 text-blue-600" />
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          {task.severity && (
-                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getSeverityColor(task.severity)}`}>
-                              {task.severity}
-                            </span>
-                          )}
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(task.status)}`}>
-                            {task.status}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3 text-xs text-gray-600">
-                        <span>{task.task_type}</span>
-                        <span>•</span>
-                        <span className="font-semibold text-green-600">₹{task.total_cost.toLocaleString()}</span>
-                        {task.occurred_at && (
-                          <>
-                            <span>•</span>
-                            <span>{new Date(task.occurred_at).toLocaleDateString()}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex-1 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-gray-900">📋 Work Orders</h3>
-                <button
-                  onClick={handleCreateWorkOrder}
-                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg transition text-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Order</span>
-                </button>
-              </div>
-
-              {workOrders.length === 0 ? (
-                <div className="text-center py-8">
-                  <ClipboardList className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-500 text-sm">No work orders yet</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {workOrders.map((order) => (
-                    <div
-                      key={order.work_order_id}
-                      className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
-                    >
-                      <h4 className="font-semibold text-gray-900 text-sm mb-2">{order.title}</h4>
-                      <div className="flex items-center space-x-3 text-xs text-gray-600">
-                        <span>{order.status}</span>
-                        {order.due_date && (
-                          <>
-                            <span>•</span>
-                            <span>Due: {new Date(order.due_date).toLocaleDateString()}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+        {/* Tasks Section */}
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-gray-900">📋 Tasks & Activities</h3>
+            <button
+              onClick={handleCreateTask}
+              className="flex items-center space-x-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Add Task</span>
+            </button>
           </div>
+
+          {tasks.length === 0 ? (
+            <div className="text-center py-12">
+              <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No tasks yet. Create your first task to get started!</p>
+              <button
+                onClick={handleCreateTask}
+                className="mt-4 text-primary-600 hover:text-primary-700 font-semibold"
+              >
+                Create Your First Task →
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {tasks.map((task) => (
+                <div
+                  key={task.task_id}
+                  onClick={() => handleOpenTask(task)}
+                  className="p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition cursor-pointer group"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center space-x-2">
+                      <h4 className="font-semibold text-gray-900 text-sm group-hover:text-primary-600">{task.short_description}</h4>
+                      {task.is_voice_recorded === 'true' && (
+                        <Mic className="w-3 h-3 text-blue-600" />
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {task.severity && (
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${getSeverityColor(task.severity)}`}>
+                          {task.severity}
+                        </span>
+                      )}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(task.status)}`}>
+                        {task.status}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3 text-xs text-gray-600">
+                    <span>{task.task_type}</span>
+                    <span>•</span>
+                    <span className="font-semibold text-green-600">₹{task.total_cost.toLocaleString()}</span>
+                    {task.occurred_at && (
+                      <>
+                        <span>•</span>
+                        <span>{new Date(task.occurred_at).toLocaleDateString()}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Notes Section */}
@@ -725,6 +687,95 @@ const CropCycleManagementComplete = () => {
               </div>
             </div>
           )}
+
+          {/* Work Orders Section */}
+          <div className="mt-6 pt-6 border-t">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">📋 Work Orders</h3>
+              <button
+                onClick={handleCreateWorkOrder}
+                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Create Work Order</span>
+              </button>
+            </div>
+
+            {(() => {
+              // Filter work orders that are linked to this task
+              const taskWorkOrders = workOrders.filter(order => {
+                if (!order.linked_task_ids) return false;
+                try {
+                  const linkedTasks = typeof order.linked_task_ids === 'string' 
+                    ? JSON.parse(order.linked_task_ids) 
+                    : order.linked_task_ids;
+                  return Array.isArray(linkedTasks) && linkedTasks.includes(selectedTask.task_id);
+                } catch {
+                  return false;
+                }
+              });
+
+              return taskWorkOrders.length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-lg">
+                  <ClipboardList className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500 text-sm">No work orders yet for this task</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {taskWorkOrders.map((order) => (
+                  <div
+                    key={order.work_order_id}
+                    className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition group"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-semibold text-gray-900 text-sm group-hover:text-blue-600">{order.title}</h4>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
+                        {order.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-xs text-gray-600 mb-2">
+                      {order.due_date && (
+                        <>
+                          <span>Due: {new Date(order.due_date).toLocaleDateString()}</span>
+                        </>
+                      )}
+                    </div>
+                    {order.description && (
+                      <p className="text-sm text-gray-700 line-clamp-2">{order.description}</p>
+                    )}
+                    <div className="mt-2 flex items-center space-x-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingWorkOrder(order); setShowWorkOrderModal(true); }}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      >
+                        <Edit className="w-4 h-4 inline mr-1" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={async (e) => { 
+                          e.stopPropagation(); 
+                          if (window.confirm('Delete this work order?')) {
+                            try {
+                              await cropCycleIncidentAPI.deleteWorkOrder(selectedCycle.incident_id, order.work_order_id);
+                              loadCycleDetail(selectedCycle.incident_id);
+                            } catch (error) {
+                              console.error('Failed to delete work order:', error);
+                              alert('Failed to delete work order');
+                            }
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium"
+                      >
+                        <Trash2 className="w-4 h-4 inline mr-1" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              );
+            })()}
+          </div>
 
           {/* Action Buttons */}
           <div className="mt-6 flex items-center justify-end space-x-3 pt-6 border-t">
