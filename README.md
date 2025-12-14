@@ -30,27 +30,56 @@ This is an admin dashboard for Nivodiya Farms featuring:
 ## Project Structure
 
 ```
-nivodiya-farms/
-├── backend/
-│   ├── app/
-│   │   ├── api/           # API endpoints
-│   │   ├── auth/          # Authentication
-│   │   ├── core/          # Configuration
-│   │   ├── models/        # Database models
-│   │   └── schemas/       # Pydantic schemas
-│   ├── requirements.txt
-│   ├── seed_data.py       # Database seeding
-│   └── README.md
-├── frontend/
-│   ├── src/
-│   │   ├── components/    # React components
-│   │   ├── contexts/      # React contexts
-│   │   ├── pages/         # Page components
-│   │   ├── services/      # API services
-│   │   └── utils/         # Utilities
-│   ├── package.json
-│   └── README.md
-└── README.md
+backend/
+│
+├── app/
+│   ├── main.py
+│   │
+│   ├── core/
+│   │   ├── config.py          # env, secrets
+│   │   ├── database.py        # engine, session ONLY
+│   │   ├── security.py        # auth utils (later)
+│   │
+│   ├── models/                # SQLAlchemy models ONLY
+│   │   ├── base.py
+│   │   ├── crop_cycle.py
+│   │   ├── task.py
+│   │   ├── work_order.py
+│   │   ├── work_order_resource.py
+│   │   ├── general_expense.py
+│   │   ├── note.py
+│   │   ├── master_option.py
+│   │
+│   ├── schemas/               # Pydantic (request/response)
+│   │   ├── crop_cycle.py
+│   │   ├── task.py
+│   │   ├── work_order.py
+│   │   ├── expense.py
+│   │   ├── note.py
+│   │
+│   ├── services/              # BUSINESS LOGIC (IMPORTANT)
+│   │   ├── crop_cycle_service.py
+│   │   ├── task_service.py
+│   │   ├── work_order_service.py
+│   │   ├── cost_service.py
+│   │   ├── stage_service.py
+│   │
+│   ├── api/                   # Routes only
+│   │   ├── auth.py
+│   │   ├── crop_cycles.py
+│   │   ├── tasks.py
+│   │   ├── work_orders.py
+│   │   ├── expenses.py
+│   │   ├── notes.py
+│   │   ├── master_options.py
+│   │
+│   └── utils/
+│       ├── id_generator.py    # INC01234, TA01234, WO01234
+│       ├── enums.py           # stages, statuses
+│       ├── language.py        # hi/en helpers
+│
+└── requirements.txt
+
 ```
 
 ## Quick Start
