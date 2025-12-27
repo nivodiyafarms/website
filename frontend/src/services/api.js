@@ -1,4 +1,17 @@
 import axios from 'axios';
+import {
+  transformCropCycleRequest,
+  transformTaskRequest,
+  transformWorkOrderRequest,
+  transformCropCycleResponse,
+  transformTaskResponse,
+  transformWorkOrderResponse,
+  transformResponseArray,
+  isCropCycleIncidentUrl,
+  isTaskUrl,
+  isWorkOrderUrl,
+  isCreateOrUpdate,
+} from '../utils/apiTransformers';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -9,13 +22,41 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add JWT token
+// Request interceptor to add JWT token and transform requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Transform request data for crop-cycle-incidents endpoints
+    if (config.data && isCropCycleIncidentUrl(config.url)) {
+      // Skip transformation for FormData (voice upload)
+      if (config.data instanceof FormData) {
+        return config;
+      }
+
+      const method = config.method?.toLowerCase();
+      if (isCreateOrUpdate(method)) {
+        try {
+          if (isTaskUrl(config.url)) {
+            // Transform task request
+            config.data = transformTaskRequest(config.data);
+          } else if (isWorkOrderUrl(config.url)) {
+            // Transform work order request
+            config.data = transformWorkOrderRequest(config.data);
+          } else {
+            // Transform crop cycle request
+            config.data = transformCropCycleRequest(config.data);
+          }
+        } catch (error) {
+          console.error('Error transforming request data:', error);
+          // Continue with original data if transformation fails
+        }
+      }
+    }
+
     return config;
   },
   (error) => {
@@ -23,9 +64,42 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle errors
+// Response interceptor to handle errors and transform responses
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Transform response data for crop-cycle-incidents endpoints
+    if (response.data && isCropCycleIncidentUrl(response.config.url)) {
+      try {
+        if (isTaskUrl(response.config.url)) {
+          // Transform task response
+          if (Array.isArray(response.data)) {
+            response.data = response.data.map(transformTaskResponse);
+          } else {
+            response.data = transformTaskResponse(response.data);
+          }
+        } else if (isWorkOrderUrl(response.config.url)) {
+          // Transform work order response
+          if (Array.isArray(response.data)) {
+            response.data = response.data.map(transformWorkOrderResponse);
+          } else {
+            response.data = transformWorkOrderResponse(response.data);
+          }
+        } else {
+          // Transform crop cycle response
+          if (Array.isArray(response.data)) {
+            response.data = response.data.map(transformCropCycleResponse);
+          } else {
+            response.data = transformCropCycleResponse(response.data);
+          }
+        }
+      } catch (error) {
+        console.error('Error transforming response data:', error);
+        // Continue with original data if transformation fails
+      }
+    }
+
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
