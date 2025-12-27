@@ -35,7 +35,7 @@ async def create_note(
 ):
     """Create a new note for a crop cycle with optional image upload"""
     # Verify crop cycle exists
-    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.incident_id == crop_cycle_id).first()
+    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.id == crop_cycle_id).first()
     if not cycle:
         raise HTTPException(status_code=404, detail="Crop cycle not found")
     
@@ -65,13 +65,14 @@ async def create_note(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error saving image: {str(e)}")
     
-    # Create note
+    # Create note using polymorphic structure
     note = CropCycleNote(
-        crop_cycle_id=crop_cycle_id,
-        user_id=current_user.user_id,
-        content=content,
-        image_path=image_path,
-        source=source
+        related_type='crop_cycle',
+        related_id=crop_cycle_id,
+        author_id=current_user.id,  # Use id instead of user_id
+        text=content,  # Use text instead of content
+        media_url=image_path,  # Use media_url instead of image_path
+        media_type='image' if image_path else None
     )
     
     db.add(note)
@@ -81,7 +82,7 @@ async def create_note(
     # Fetch with user details
     note_with_user = db.query(CropCycleNote).options(
         joinedload(CropCycleNote.user)
-    ).filter(CropCycleNote.note_id == note.note_id).first()
+    ).filter(CropCycleNote.id == note.id).first()  # Use id instead of note_id
     
     # Prepare response
     response = CropCycleNoteResponse.model_validate(note_with_user)
@@ -101,15 +102,16 @@ def get_notes(
 ):
     """Get all notes for a crop cycle"""
     # Verify crop cycle exists
-    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.incident_id == crop_cycle_id).first()
+    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.id == crop_cycle_id).first()
     if not cycle:
         raise HTTPException(status_code=404, detail="Crop cycle not found")
     
-    # Fetch notes with user details
+    # Fetch notes with user details using polymorphic fields
     notes = db.query(CropCycleNote).options(
         joinedload(CropCycleNote.user)
     ).filter(
-        CropCycleNote.crop_cycle_id == crop_cycle_id
+        CropCycleNote.related_type == 'crop_cycle',
+        CropCycleNote.related_id == crop_cycle_id
     ).order_by(
         CropCycleNote.created_at.asc()  # Oldest first for chat-like interface
     ).offset(skip).limit(limit).all()
@@ -136,8 +138,9 @@ def get_note(
     note = db.query(CropCycleNote).options(
         joinedload(CropCycleNote.user)
     ).filter(
-        CropCycleNote.note_id == note_id,
-        CropCycleNote.crop_cycle_id == crop_cycle_id
+        CropCycleNote.id == note_id,  # Use id instead of note_id
+        CropCycleNote.related_type == 'crop_cycle',
+        CropCycleNote.related_id == crop_cycle_id
     ).first()
     
     if not note:
@@ -161,27 +164,28 @@ async def update_note(
 ):
     """Update a note (only by the creator)"""
     note = db.query(CropCycleNote).filter(
-        CropCycleNote.note_id == note_id,
-        CropCycleNote.crop_cycle_id == crop_cycle_id
+        CropCycleNote.id == note_id,  # Use id instead of note_id
+        CropCycleNote.related_type == 'crop_cycle',
+        CropCycleNote.related_id == crop_cycle_id
     ).first()
     
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
     
     # Check if user is the creator
-    if note.user_id != current_user.user_id:
+    if note.author_id != current_user.id:  # Use author_id and id
         raise HTTPException(status_code=403, detail="You can only edit your own notes")
     
     # Update content
     if content:
-        note.content = content
+        note.text = content  # Use text instead of content
     
     # Handle image upload
     if image and image.filename:
         # Delete old image if exists
-        if note.image_path and os.path.exists(note.image_path):
+        if note.media_url and os.path.exists(note.media_url):  # Use media_url instead of image_path
             try:
-                os.remove(note.image_path)
+                os.remove(note.media_url)
             except:
                 pass
         
@@ -203,18 +207,19 @@ async def update_note(
             with open(image_path, "wb") as img_file:
                 img_content = await image.read()
                 img_file.write(img_content)
-            note.image_path = image_path
+            note.media_url = image_path  # Use media_url instead of image_path
+            note.media_type = 'image'
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error saving image: {str(e)}")
     
-    note.updated_at = datetime.utcnow()
+    # Note: Note model doesn't have updated_at, only created_at
     db.commit()
     db.refresh(note)
     
     # Fetch with user details
     note_with_user = db.query(CropCycleNote).options(
         joinedload(CropCycleNote.user)
-    ).filter(CropCycleNote.note_id == note.note_id).first()
+    ).filter(CropCycleNote.id == note.id).first()  # Use id instead of note_id
     
     response = CropCycleNoteResponse.model_validate(note_with_user)
     response.user_name = note_with_user.user.name if note_with_user.user else None
@@ -232,21 +237,22 @@ def delete_note(
 ):
     """Delete a note (only by the creator)"""
     note = db.query(CropCycleNote).filter(
-        CropCycleNote.note_id == note_id,
-        CropCycleNote.crop_cycle_id == crop_cycle_id
+        CropCycleNote.id == note_id,  # Use id instead of note_id
+        CropCycleNote.related_type == 'crop_cycle',
+        CropCycleNote.related_id == crop_cycle_id
     ).first()
     
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
     
     # Check if user is the creator
-    if note.user_id != current_user.user_id:
+    if note.author_id != current_user.id:  # Use author_id and id
         raise HTTPException(status_code=403, detail="You can only delete your own notes")
     
     # Delete image if exists
-    if note.image_path and os.path.exists(note.image_path):
+    if note.media_url and os.path.exists(note.media_url):  # Use media_url instead of image_path
         try:
-            os.remove(note.image_path)
+            os.remove(note.media_url)
         except:
             pass
     

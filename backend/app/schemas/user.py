@@ -19,10 +19,10 @@ class UserCreate(BaseModel):
 
 class UserResponse(BaseModel):
     user_id: UUID
-    name: str
-    phone: str
+    name: str  # User model returns string (reads from user_metadata)
+    phone: str  # User model returns string (reads from user_metadata)
     role: UserRole
-    language: Optional[UserLanguage]
+    language: Optional[UserLanguage] = UserLanguage.EN_IN
 
     class Config:
         from_attributes = True

@@ -4,9 +4,13 @@ from fastapi.staticfiles import StaticFiles
 from app.database import engine, Base
 from app.api import auth, users, fields, crop_cycles, crops, materials, equipment, crop_cycle_incidents, crop_cycle_notes, chatbot
 import os
+from sqlalchemy import text
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Import all models to ensure they are registered with SQLAlchemy Base
+from app.models import (
+    User, Field, CropCatalog, Material, Equipment, CropCycle,
+    CropCycleNote, CropCycleIncident, Task, WorkOrder, WorkOrderResource, Note
+)
 
 app = FastAPI(
     title="Nivodiya Farms KPI Dashboard API",
@@ -51,5 +55,16 @@ def root():
 
 @app.get("/health")
 def health_check():
-    return {"success": True, "message": "API is healthy"}
-
+    """Health check endpoint that also tests database connection"""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return {
+        "success": True,
+        "message": "API is healthy",
+        "database": db_status
+    }

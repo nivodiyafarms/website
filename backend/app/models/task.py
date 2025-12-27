@@ -1,6 +1,6 @@
-from sqlalchemy import Column, String, Float, DateTime, Text, ForeignKey, Enum as SQLEnum, Integer
+from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Enum as SQLEnum, Numeric
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign
 from datetime import datetime
 import enum
 import uuid
@@ -8,138 +8,128 @@ from app.database import Base
 
 
 class TaskType(str, enum.Enum):
-    IRRIGATION = "IRRIGATION"
-    FERTILIZER = "FERTILIZER"
-    PESTICIDE = "PESTICIDE"
-    FUNGICIDE = "FUNGICIDE"
-    HERBICIDE = "HERBICIDE"
-    WEEDING = "WEEDING"
-    LABOR = "LABOR"
-    SPRAY = "SPRAY"
-    SCOUTING = "SCOUTING"
-    TRANSPORT = "TRANSPORT"
-    HARVEST = "HARVEST"
-    STORAGE_IN = "STORAGE_IN"
-    STORAGE_OUT = "STORAGE_OUT"
-    SALE = "SALE"
-    PAYMENT = "PAYMENT"
-    OTHER = "OTHER"
+    """Task types - used for validation, stored as TEXT in database"""
+    IRRIGATION = "irrigation"
+    FERTILIZER = "fertilizer"
+    PESTICIDE = "pesticide"
+    FUNGICIDE = "fungicide"
+    HERBICIDE = "herbicide"
+    WEEDING = "weeding"
+    LABOR = "labor"
+    SPRAY = "spray"
+    SCOUTING = "scouting"
+    TRANSPORT = "transport"
+    HARVEST = "harvest"
+    STORAGE_IN = "storage_in"
+    STORAGE_OUT = "storage_out"
+    SALE = "sale"
+    PAYMENT = "payment"
+    OTHER = "other"
 
 
 class TaskStatus(str, enum.Enum):
-    NEW = "NEW"
-    IN_PROGRESS = "IN_PROGRESS"
-    ON_HOLD = "ON_HOLD"
-    RESOLVED = "RESOLVED"
-    CLOSED = "CLOSED"
-    REOPENED = "REOPENED"
-    CANCELLED = "CANCELLED"
+    NEW = "new"
+    IN_PROGRESS = "in_progress"
+    ON_HOLD = "on_hold"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
+    REOPENED = "reopened"
+    CANCELLED = "cancelled"
 
 
 class SeverityLevel(str, enum.Enum):
-    SEV_1 = "SEV_1"  # Critical (>50,000)
-    SEV_2 = "SEV_2"  # High (20,000-50,000)
-    SEV_3 = "SEV_3"  # Medium (5,000-20,000)
-    SEV_4 = "SEV_4"  # Low (<5,000)
+    SEV_1 = "sev1"  # Critical
+    SEV_2 = "sev2"  # High
+    SEV_3 = "sev3"  # Medium
+    SEV_4 = "sev4"  # Low
+
+
+class ResourceType(str, enum.Enum):
+    """Resource types - used for validation in work orders"""
+    LABOR = "labor"
+    EQUIPMENT = "equipment"
+    MATERIAL = "material"
+    WATER = "water"
+    FUEL = "fuel"
 
 
 class Task(Base):
     """
-    Child Incident - Task within a Crop Cycle
-    Represents individual activities and their resources
+    Task - Represents a task within a crop cycle
+    Matches the tasks table schema exactly
     """
     __tablename__ = "tasks"
 
     # Primary Key
-    task_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Task Number
+    task_no = Column(Text, nullable=True, unique=True)
     
     # Parent Crop Cycle
-    crop_cycle_id = Column(UUID(as_uuid=True), ForeignKey("crop_cycle_incidents.incident_id"), nullable=False)
+    crop_cycle_id = Column(UUID(as_uuid=True), ForeignKey("crop_cycles.id"), nullable=True)  # Changed FK and nullable
     
     # Task Information
-    task_type = Column(SQLEnum(TaskType), nullable=False)
-    short_description = Column(String(200), nullable=False)
+    type = Column(Text, nullable=False)  # Changed from task_type
+    sub_type = Column(Text, nullable=True)  # New field
+    short_description = Column(Text, nullable=True)  # Changed from NOT NULL
     description = Column(Text, nullable=True)
     
-    # Assignment
-    assigned_to_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
-    created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
-    approved_by_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
+    # Status
+    status = Column(String(11), nullable=True)  # Changed from NOT NULL, enum type
     
     # Execution Details
     occurred_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)  # Changed from closed_at
     
-    # Resource Summary
-    labor_count = Column(Integer, nullable=True)
-    labor_hours = Column(Float, nullable=True)
-    total_cost = Column(Float, nullable=False, default=0.0)
+    # Severity
+    severity = Column(String(4), nullable=True)  # Changed from enum to VARCHAR
     
-    # Outcome
-    outcome_observation = Column(Text, nullable=True)
-    severity = Column(SQLEnum(SeverityLevel), nullable=True)
+    # Cost
+    cost = Column(Numeric, nullable=True, default=0)  # Changed from total_cost, Float to Numeric
     
-    # Status Management
-    status = Column(SQLEnum(TaskStatus), nullable=False, default=TaskStatus.NEW)
-    on_hold_reason = Column(Text, nullable=True)
-    resolution_notes = Column(Text, nullable=True)
-    
-    # Location
-    gps_lat = Column(Float, nullable=True)
-    gps_lng = Column(Float, nullable=True)
-    
-    # Attachments
-    attachments = Column(Text, nullable=True)  # JSON array of file paths
+    # Assignment (FKs to auth.users)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("auth.users.id"), nullable=True)  # Changed from created_by_id
+    approved_by = Column(UUID(as_uuid=True), ForeignKey("auth.users.id"), nullable=True)  # Changed from approved_by_id
     
     # Timestamps
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-    closed_at = Column(DateTime, nullable=True)
-    
-    # Voice Recording Metadata
-    is_voice_recorded = Column(String(10), nullable=False, default="false")
-    audio_file_path = Column(String(500), nullable=True)
-    transcript = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True, default=datetime.utcnow)  # Changed from NOT NULL
+    updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)  # Changed from NOT NULL
     
     # Relationships
-    crop_cycle = relationship("CropCycleIncident", back_populates="tasks")
-    assigned_to = relationship("User", foreign_keys=[assigned_to_id], backref="assigned_tasks")
-    created_by = relationship("User", foreign_keys=[created_by_id], backref="created_tasks")
-    approved_by = relationship("User", foreign_keys=[approved_by_id], backref="approved_tasks")
-    resources = relationship("TaskResource", back_populates="task", cascade="all, delete-orphan")
-
-
-class ResourceType(str, enum.Enum):
-    LABOR = "LABOR"
-    EQUIPMENT = "EQUIPMENT"
-    MATERIAL = "MATERIAL"
-    WATER = "WATER"
-    FUEL = "FUEL"
-
-
-class TaskResource(Base):
-    """
-    Resources used in a task (labor, equipment, materials, etc.)
-    """
-    __tablename__ = "task_resources"
-
-    # Primary Key
-    resource_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    crop_cycle = relationship("CropCycle", back_populates="tasks", foreign_keys=[crop_cycle_id])
+    # Note: assigned_to relationship removed - not in database
+    # Note: created_by and approved_by relationships point to auth.users
+    work_orders = relationship("WorkOrder", back_populates="task", foreign_keys="WorkOrder.task_id")
+    notes = relationship("Note", primaryjoin="and_(foreign(Note.related_id)==Task.id, Note.related_type=='task')", viewonly=True)
     
-    # Parent Task
-    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.task_id"), nullable=False)
+    # Property aliases for backward compatibility
+    @property
+    def task_id(self):
+        """Alias for id for backward compatibility"""
+        return self.id
     
-    # Resource Information
-    resource_type = Column(SQLEnum(ResourceType), nullable=False)
-    name = Column(String(200), nullable=False)  # e.g., "DAP 18-46-0", "Tractor"
-    quantity = Column(Float, nullable=False)
-    unit = Column(String(50), nullable=False)  # kg, L, hr, acre, mm
-    cost_per_unit = Column(Float, nullable=True)
-    total_cost = Column(Float, nullable=False)
+    @property
+    def task_type(self):
+        """Alias for type for backward compatibility"""
+        return self.type
     
-    # Timestamps
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    @property
+    def created_by_id(self):
+        """Alias for created_by for backward compatibility"""
+        return self.created_by
     
-    # Relationships
-    task = relationship("Task", back_populates="resources")
-
-
+    @property
+    def approved_by_id(self):
+        """Alias for approved_by for backward compatibility"""
+        return self.approved_by
+    
+    @property
+    def total_cost(self):
+        """Alias for cost for backward compatibility"""
+        return self.cost
+    
+    @property
+    def closed_at(self):
+        """Alias for resolved_at for backward compatibility"""
+        return self.resolved_at

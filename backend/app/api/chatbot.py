@@ -250,7 +250,7 @@ def create_work_order_from_chatbot(
         
         # Verify crop cycle exists
         cycle = db.query(CropCycleIncident).filter(
-            CropCycleIncident.incident_id == request.crop_cycle_id
+            CropCycleIncident.id == request.crop_cycle_id
         ).first()
         if not cycle:
             raise HTTPException(status_code=404, detail="Crop cycle not found")
@@ -258,14 +258,14 @@ def create_work_order_from_chatbot(
         # Create work order
         work_order_data = request.form_data
         work_order = WorkOrder(
-            crop_cycle_id=request.crop_cycle_id,
             title=work_order_data["title"],
-            description=work_order_data["description"],
-            instructions=work_order_data.get("instructions"),
-            assigned_to_id=work_order_data["assigned_to_id"],
+            description=work_order_data.get("description"),
+            assigned_to=work_order_data.get("assigned_to_id"),  # Use assigned_to instead of assigned_to_id
             due_date=work_order_data.get("due_date"),
-            created_by_id=current_user.user_id
+            created_by=current_user.id  # Use created_by instead of created_by_id
         )
+        # Note: Work orders are linked to tasks, not directly to crop cycles
+        # If you need to link to a task, set work_order.task_id
         
         db.add(work_order)
         db.commit()
@@ -289,59 +289,49 @@ def create_task_from_chatbot(
 ):
     """Create task from chatbot data"""
     try:
-        from app.models.task import Task, TaskResource
+        from app.models.task import Task
         from app.models.crop_cycle_incident import CropCycleIncident
         
         # Verify crop cycle exists
         cycle = db.query(CropCycleIncident).filter(
-            CropCycleIncident.incident_id == request.crop_cycle_id
+            CropCycleIncident.id == request.crop_cycle_id
         ).first()
         if not cycle:
             raise HTTPException(status_code=404, detail="Crop cycle not found")
         
         # Create task
         task_data = request.form_data
+        # Map task_type to type
+        task_type = task_data.get("task_type", "OTHER")
+        if isinstance(task_type, str):
+            task_type = task_type.lower() if task_type else "other"
+        
         task = Task(
             crop_cycle_id=request.crop_cycle_id,
-            task_type=task_data["task_type"],
-            short_description=task_data["short_description"],
+            type=task_type,  # Use 'type' instead of 'task_type'
+            short_description=task_data.get("short_description", ""),
             description=task_data.get("description"),
-            assigned_to_id=task_data["assigned_to_id"],
             occurred_at=task_data.get("occurred_at"),
-            labor_count=task_data.get("labor_count"),
-            labor_hours=task_data.get("labor_hours"),
-            outcome_observation=task_data.get("outcome_observation"),
-            gps_lat=task_data.get("gps_lat"),
-            gps_lng=task_data.get("gps_lng"),
-            created_by_id=current_user.user_id
+            created_by=current_user.id  # Use 'created_by' instead of 'created_by_id'
         )
         
-        # Calculate total cost from resources
+        # Calculate total cost from resources if provided
         total_cost = sum(r.get("total_cost", 0) for r in task_data.get("resources", []))
-        task.total_cost = total_cost
+        task.cost = total_cost if total_cost > 0 else 0  # Use 'cost' instead of 'total_cost'
         
         db.add(task)
         db.flush()
         
-        # Add resources
-        for resource_data in task_data.get("resources", []):
-            resource = TaskResource(
-                task_id=task.task_id,
-                resource_type=resource_data["resource_type"],
-                name=resource_data["name"],
-                quantity=resource_data["quantity"],
-                unit=resource_data["unit"],
-                cost_per_unit=resource_data["cost_per_unit"],
-                total_cost=resource_data["total_cost"]
-            )
-            db.add(resource)
+        # Note: Task resources are not stored directly in the database
+        # Resources are stored in work_order_resources when work orders are created
+        # If resources are provided, they should be associated with a work order instead
         
         db.commit()
         db.refresh(task)
         
         return TaskCreateResponse(
             success=True,
-            task_id=task.task_id,
+            task_id=task.id,  # Use id instead of task_id
             message="Task created successfully"
         )
         

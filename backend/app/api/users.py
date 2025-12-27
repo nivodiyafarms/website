@@ -17,23 +17,25 @@ def get_users(db: Session = Depends(get_db), current_user: User = Depends(get_cu
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    # Check if phone already exists
-    db_user = db.query(User).filter(User.phone == user.phone).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Phone number already registered")
-    
-    hashed_password = get_password_hash(user.password)
-    db_user = User(
-        name=user.name,
-        phone=user.phone,
-        password=hashed_password,
-        role=user.role,
-        language=user.language
+    """
+    Create a new user.
+    Note: Supabase auth.users is managed by Supabase Auth API.
+    Users should be created via Supabase Auth (signUp) and then
+    custom fields (name, phone, role, language) should be stored
+    in user_metadata or a separate public.users table.
+    """
+    raise HTTPException(
+        status_code=501,
+        detail="User creation via this endpoint is not supported. "
+               "Users must be created via Supabase Auth API. "
+               "After user creation, update user_metadata with custom fields."
     )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+    
+    # TODO: Implement user creation via Supabase Auth API
+    # Example:
+    # 1. Call Supabase Auth signUp API with email/password
+    # 2. Update user_metadata with phone, name, role, language
+    # 3. Or create a record in a separate public.users table
 
 
 @router.get("/me", response_model=UserResponse)

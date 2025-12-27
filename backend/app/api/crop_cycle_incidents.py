@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.models.crop_cycle_incident import CropCycleIncident, CropStage, CropCycleStatus
-from app.models.task import Task, TaskResource, TaskStatus, SeverityLevel
-from app.models.work_order import WorkOrder
+from app.models.task import Task, TaskStatus, SeverityLevel
+from app.models.work_order import WorkOrder, WorkOrderResource
 from app.schemas.crop_cycle_incident import *
 from app.auth.security import get_current_user
 from app.models.user import User
@@ -56,13 +56,17 @@ def get_crop_cycles(
     query = db.query(CropCycleIncident)
     
     if status:
-        query = query.filter(CropCycleIncident.status == status)
+        # Convert enum to string value for database comparison
+        status_value = status.value if hasattr(status, 'value') else str(status)
+        query = query.filter(CropCycleIncident.status == status_value)
     if current_stage:
-        query = query.filter(CropCycleIncident.current_stage == current_stage)
+        # Convert enum to string value for database comparison
+        stage_value = current_stage.value if hasattr(current_stage, 'value') else str(current_stage)
+        query = query.filter(CropCycleIncident.current_stage == stage_value)
     if field_id:
-        query = query.filter(CropCycleIncident.field_id == field_id)
+        query = query.filter(CropCycleIncident.field_code == field_id)  # Use field_code instead of field_id
     
-    cycles = query.order_by(CropCycleIncident.opened_at.desc()).offset(skip).limit(limit).all()
+    cycles = query.order_by(CropCycleIncident.created_at.desc()).offset(skip).limit(limit).all()  # Use created_at instead of opened_at
     return cycles
 
 
@@ -73,7 +77,7 @@ def get_crop_cycle(
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific crop cycle"""
-    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.incident_id == incident_id).first()
+    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.id == incident_id).first()
     if not cycle:
         raise HTTPException(status_code=404, detail="Crop cycle not found")
     return cycle
@@ -87,7 +91,7 @@ def update_crop_cycle(
     current_user: User = Depends(get_current_user)
 ):
     """Update crop cycle and its current stage"""
-    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.incident_id == incident_id).first()
+    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.id == incident_id).first()
     if not cycle:
         raise HTTPException(status_code=404, detail="Crop cycle not found")
     
@@ -111,7 +115,7 @@ def delete_crop_cycle(
     current_user: User = Depends(get_current_user)
 ):
     """Delete a crop cycle and all its children"""
-    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.incident_id == incident_id).first()
+    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.id == incident_id).first()
     if not cycle:
         raise HTTPException(status_code=404, detail="Crop cycle not found")
     
@@ -141,29 +145,33 @@ def create_task(
     
     # Create task
     task_dict = data.model_dump(exclude={'resources', 'crop_cycle_id'})
-    task = Task(**task_dict, crop_cycle_id=crop_cycle_id, created_by_id=current_user.user_id)
+    # Map task_type to type if present
+    if 'task_type' in task_dict:
+        task_dict['type'] = task_dict.pop('task_type')
+    task = Task(**task_dict, crop_cycle_id=crop_cycle_id, created_by=current_user.id)
     
-    # Calculate total cost from resources
-    total_cost = sum(r.total_cost for r in data.resources)
-    task.total_cost = total_cost
-    
-    # Auto-assign severity based on cost
-    if total_cost >= 50000:
-        task.severity = SeverityLevel.SEV_1
-    elif total_cost >= 20000:
-        task.severity = SeverityLevel.SEV_2
-    elif total_cost >= 5000:
-        task.severity = SeverityLevel.SEV_3
+    # Calculate total cost from resources if provided
+    if hasattr(data, 'resources') and data.resources:
+        total_cost = sum(r.total_cost for r in data.resources)
+        task.cost = total_cost
+        
+        # Auto-assign severity based on cost
+        if total_cost >= 50000:
+            task.severity = "sev1"
+        elif total_cost >= 20000:
+            task.severity = "sev2"
+        elif total_cost >= 5000:
+            task.severity = "sev3"
+        else:
+            task.severity = "sev4"
     else:
-        task.severity = SeverityLevel.SEV_4
+        task.cost = 0
     
     db.add(task)
     db.flush()
     
-    # Add resources
-    for resource_data in data.resources:
-        resource = TaskResource(**resource_data.model_dump(), task_id=task.task_id)
-        db.add(resource)
+    # Note: Task resources are not stored directly in the database
+    # Resources are stored in work_order_resources when work orders are created
     
     db.commit()
     db.refresh(task)
@@ -184,9 +192,13 @@ def get_tasks(
     query = db.query(Task).filter(Task.crop_cycle_id == crop_cycle_id)
     
     if status:
-        query = query.filter(Task.status == status)
+        # Convert enum to string value for database comparison
+        status_value = status.value if hasattr(status, 'value') else str(status)
+        query = query.filter(Task.status == status_value)
     if task_type:
-        query = query.filter(Task.task_type == task_type)
+        # Convert enum to string value for database comparison
+        task_type_value = task_type.value if hasattr(task_type, 'value') else str(task_type)
+        query = query.filter(Task.type == task_type_value)
     
     tasks = query.order_by(Task.created_at.desc()).offset(skip).limit(limit).all()
     return tasks
@@ -200,7 +212,7 @@ def get_task(
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific task"""
-    task = db.query(Task).filter(Task.task_id == task_id, Task.crop_cycle_id == crop_cycle_id).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.crop_cycle_id == crop_cycle_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -215,7 +227,7 @@ def update_task(
     current_user: User = Depends(get_current_user)
 ):
     """Update a task"""
-    task = db.query(Task).filter(Task.task_id == task_id, Task.crop_cycle_id == crop_cycle_id).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.crop_cycle_id == crop_cycle_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
@@ -226,12 +238,12 @@ def update_task(
     # Auto-close after 7 days if resolved
     if data.status == TaskStatus.RESOLVED:
         if task.updated_at and (datetime.utcnow() - task.updated_at) > timedelta(days=7):
-            task.status = TaskStatus.CLOSED
-            task.closed_at = datetime.utcnow()
+            task.status = "closed"
+            task.resolved_at = datetime.utcnow()  # Use resolved_at instead of closed_at
     
-    # Set closed_at when manually closed
-    if data.status == TaskStatus.CLOSED and not task.closed_at:
-        task.closed_at = datetime.utcnow()
+    # Set resolved_at when manually closed
+    if data.status == TaskStatus.CLOSED and not task.resolved_at:
+        task.resolved_at = datetime.utcnow()  # Use resolved_at instead of closed_at
     
     db.commit()
     db.refresh(task)
@@ -246,7 +258,7 @@ def delete_task(
     current_user: User = Depends(get_current_user)
 ):
     """Delete a task"""
-    task = db.query(Task).filter(Task.task_id == task_id, Task.crop_cycle_id == crop_cycle_id).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.crop_cycle_id == crop_cycle_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
@@ -306,7 +318,7 @@ async def upload_voice_task(
         extracted_task = VoiceTaskData(
             short_description=transcript[:200] if len(transcript) > 200 else transcript,
             description=transcript,
-            task_type=TaskType.OTHER
+            task_type=TaskType.OTHER.value  # Use .value to get the string "other"
         )
         
         return VoiceTaskPreview(
@@ -335,7 +347,10 @@ def create_work_order(
     if not cycle:
         raise HTTPException(status_code=404, detail="Crop cycle not found")
     
-    work_order = WorkOrder(**data.model_dump(exclude={'crop_cycle_id'}), crop_cycle_id=crop_cycle_id, created_by_id=current_user.user_id)
+    # Work orders are linked to tasks, not directly to crop cycles
+    # Get a task for this crop cycle or create work order without crop_cycle_id
+    work_order_data = data.model_dump(exclude={'crop_cycle_id'})
+    work_order = WorkOrder(**work_order_data, created_by=current_user.id)  # Use created_by instead of created_by_id
     db.add(work_order)
     db.commit()
     db.refresh(work_order)
@@ -351,7 +366,9 @@ def get_work_orders(
     current_user: User = Depends(get_current_user)
 ):
     """Get all work orders for a crop cycle"""
-    orders = db.query(WorkOrder).filter(WorkOrder.crop_cycle_id == crop_cycle_id).order_by(WorkOrder.created_at.desc()).offset(skip).limit(limit).all()
+    # Work orders are linked to tasks, which are linked to crop cycles
+    # Get work orders through tasks
+    orders = db.query(WorkOrder).join(Task).filter(Task.crop_cycle_id == crop_cycle_id).order_by(WorkOrder.created_at.desc()).offset(skip).limit(limit).all()
     return orders
 
 
@@ -363,7 +380,8 @@ def get_work_order(
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific work order"""
-    order = db.query(WorkOrder).filter(WorkOrder.work_order_id == work_order_id, WorkOrder.crop_cycle_id == crop_cycle_id).first()
+    # Work orders are linked to tasks, which are linked to crop cycles
+    order = db.query(WorkOrder).join(Task).filter(WorkOrder.id == work_order_id, Task.crop_cycle_id == crop_cycle_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Work order not found")
     return order
@@ -378,7 +396,8 @@ def update_work_order(
     current_user: User = Depends(get_current_user)
 ):
     """Update a work order"""
-    order = db.query(WorkOrder).filter(WorkOrder.work_order_id == work_order_id, WorkOrder.crop_cycle_id == crop_cycle_id).first()
+    # Work orders are linked to tasks, which are linked to crop cycles
+    order = db.query(WorkOrder).join(Task).filter(WorkOrder.id == work_order_id, Task.crop_cycle_id == crop_cycle_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Work order not found")
     
@@ -404,7 +423,8 @@ def delete_work_order(
     current_user: User = Depends(get_current_user)
 ):
     """Delete a work order"""
-    order = db.query(WorkOrder).filter(WorkOrder.work_order_id == work_order_id, WorkOrder.crop_cycle_id == crop_cycle_id).first()
+    # Work orders are linked to tasks, which are linked to crop cycles
+    order = db.query(WorkOrder).join(Task).filter(WorkOrder.id == work_order_id, Task.crop_cycle_id == crop_cycle_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Work order not found")
     
