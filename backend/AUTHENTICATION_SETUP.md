@@ -45,3 +45,4 @@ The current code tries to:
 2. Implement the chosen solution
 3. Update User model and authentication functions accordingly
 
+

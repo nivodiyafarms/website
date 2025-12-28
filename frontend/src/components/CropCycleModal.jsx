@@ -1,13 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Mic, Bot, Upload } from "lucide-react";
 
-export default function IncidentModal({ isOpen, onClose, onSubmit }) {
-  if (!isOpen) return null;
-
+export default function IncidentModal({ isOpen, onClose, onSubmit, fields = [], editing = null }) {
   // ---------------- STATES ----------------
   const [showSolutionModal, setShowSolutionModal] = useState(false);
   const [activeTab, setActiveTab] = useState("Notes");
 
+  // Initialize form data
   const [formData, setFormData] = useState({
     khet: "",
     buwaiDate: "",
@@ -26,6 +25,50 @@ export default function IncidentModal({ isOpen, onClose, onSubmit }) {
     resolution: "",
   });
 
+  // Update form data when editing changes
+  useEffect(() => {
+    if (editing) {
+      setFormData({
+        khet: editing.field_id || editing.field_code || "",
+        buwaiDate: editing.sowing_date ? new Date(editing.sowing_date).toISOString().split('T')[0] : "",
+        katayiDate: editing.expected_harvest_date ? new Date(editing.expected_harvest_date).toISOString().split('T')[0] : "",
+        vartman_charan: editing.current_stage || "",
+        varnan: editing.description || "",
+        tipanni: editing.notes || "",
+        season: editing.season || "",
+        fasal_naam: editing.crop_name || "",
+        beej_category: editing.seed_category || editing.crop_variety || "",
+        sthiti: editing.status || "",
+        solution: "",
+        kharch: "",
+        labh: "",
+        notes: "",
+        resolution: "",
+      });
+    } else {
+      // Reset form when not editing
+      setFormData({
+        khet: "",
+        buwaiDate: "",
+        katayiDate: "",
+        vartman_charan: "",
+        varnan: "",
+        tipanni: "",
+        season: "",
+        fasal_naam: "",
+        beej_category: "",
+        sthiti: "",
+        solution: "",
+        kharch: "",
+        labh: "",
+        notes: "",
+        resolution: "",
+      });
+    }
+  }, [editing, isOpen]);
+
+  if (!isOpen) return null;
+
   // ---------------- OPTIONS ----------------
   const tabs = [
     "Notes",
@@ -40,15 +83,10 @@ export default function IncidentModal({ isOpen, onClose, onSubmit }) {
   const statusOptions = ["खोलना", "समाधान किया", "पुन: खोला गया", "बंद", "रद्द किया गया"];
   const stageOptions = ["बुआई", "वृद्धि", "फूल पर", "फल पर", "कटाई", "भंडार", "बिक्री", "भुगतान"];
 
-  const khetOptions = [
-    "HQ0001","NIB001","NIA001","NID005","NID006","NID001","NID002",
-    "NID003","NID004","NID007","NID008","NID009","BAD010","BAD011",
-    "NIA002","NIA003","NIA004","NIA005","HIA006","HIA007","HIA008",
-    "HIA009","NIB002","NIB003","NIB004","NIB005","NIB006","NIB007",
-    "HAB008","NIB009","NIB010","NIC001","NIC002","NIC003","BAC004",
-    "BAC005","BAC006","BAC007","NID012","NID013","NID014","NID015",
-    "NID016","NIC008",
-  ];
+  // Use fields from API, fallback to empty array
+  const khetOptions = fields && fields.length > 0 
+    ? fields.map(field => field.field_id || field.farm_id).filter(Boolean)
+    : [];
 
   // ---------------- HANDLERS ----------------
   const handleChange = (key) => (e) =>
@@ -226,9 +264,13 @@ export default function IncidentModal({ isOpen, onClose, onSubmit }) {
                 onChange={handleChange("khet")}
               >
                 <option value="">खेत क्रमांक चुनें</option>
-                {khetOptions.map((k) => (
-                  <option key={k} value={k}>{k}</option>
-                ))}
+                {khetOptions.length > 0 ? (
+                  khetOptions.map((k) => (
+                    <option key={k} value={k}>{k}</option>
+                  ))
+                ) : (
+                  <option value="" disabled>Loading fields...</option>
+                )}
               </select>
 
               <input

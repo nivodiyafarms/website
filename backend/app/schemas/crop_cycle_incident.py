@@ -18,6 +18,7 @@ class CropCycleIncidentBase(BaseModel):
     current_stage: CropStage = CropStage.SOWING
     status: CropCycleStatus = CropCycleStatus.OPEN
     supervisor_id: UUID
+    season: Optional[str] = None  # Added to match model requirement
     short_description: Optional[str] = None
     description: Optional[str] = None
     notes: Optional[str] = None

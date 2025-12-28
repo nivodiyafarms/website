@@ -35,7 +35,45 @@ def create_crop_cycle(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new crop cycle (parent incident)"""
-    crop_cycle = CropCycleIncident(**data.model_dump())
+    # Map schema fields to model fields
+    data_dict = data.model_dump(exclude_unset=True)
+    
+    # Map field_id to field_code
+    if 'field_id' in data_dict:
+        data_dict['field_code'] = data_dict.pop('field_id')
+    
+    # Map supervisor_id to created_by
+    if 'supervisor_id' in data_dict:
+        data_dict['created_by'] = data_dict.pop('supervisor_id')
+    elif not data_dict.get('created_by'):
+        data_dict['created_by'] = current_user.id
+    
+    # Map crop_variety to seed_category
+    if 'crop_variety' in data_dict:
+        data_dict['seed_category'] = data_dict.pop('crop_variety')
+    
+    # Convert datetime to date for sowing_date and expected_harvest_date
+    if 'sowing_date' in data_dict and data_dict['sowing_date']:
+        if isinstance(data_dict['sowing_date'], datetime):
+            data_dict['sowing_date'] = data_dict['sowing_date'].date()
+    if 'expected_harvest_date' in data_dict and data_dict['expected_harvest_date']:
+        if isinstance(data_dict['expected_harvest_date'], datetime):
+            data_dict['expected_harvest_date'] = data_dict['expected_harvest_date'].date()
+    
+    # Ensure season is provided (required by model)
+    # Check if season was passed in the request (might be in data_dict if transformer included it)
+    if 'season' not in data_dict or not data_dict['season']:
+        # Try to infer from current date or set default
+        from datetime import date
+        month = date.today().month
+        if month in [10, 11, 12, 1, 2, 3]:
+            data_dict['season'] = 'Rabi'
+        elif month in [4, 5, 6]:
+            data_dict['season'] = 'Zaid'
+        else:
+            data_dict['season'] = 'Kharif'
+    
+    crop_cycle = CropCycleIncident(**data_dict)
     db.add(crop_cycle)
     db.commit()
     db.refresh(crop_cycle)
@@ -96,6 +134,23 @@ def update_crop_cycle(
         raise HTTPException(status_code=404, detail="Crop cycle not found")
     
     update_data = data.model_dump(exclude_unset=True)
+    
+    # Map schema fields to model fields
+    if 'field_id' in update_data:
+        update_data['field_code'] = update_data.pop('field_id')
+    if 'supervisor_id' in update_data:
+        update_data['created_by'] = update_data.pop('supervisor_id')
+    if 'crop_variety' in update_data:
+        update_data['seed_category'] = update_data.pop('crop_variety')
+    
+    # Convert datetime to date for date fields
+    if 'sowing_date' in update_data and update_data['sowing_date']:
+        if isinstance(update_data['sowing_date'], datetime):
+            update_data['sowing_date'] = update_data['sowing_date'].date()
+    if 'expected_harvest_date' in update_data and update_data['expected_harvest_date']:
+        if isinstance(update_data['expected_harvest_date'], datetime):
+            update_data['expected_harvest_date'] = update_data['expected_harvest_date'].date()
+    
     for field, value in update_data.items():
         setattr(cycle, field, value)
     
