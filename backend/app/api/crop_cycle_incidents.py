@@ -18,6 +18,7 @@ from app.schemas.crop_cycle_incident import *
 from app.auth.security import get_current_user
 from app.models.user import User
 from app.services.groq_service import GroqService
+from app.utils.id_generator import generate_incident_id, generate_task_id, generate_work_order_id
 
 router = APIRouter(prefix="/crop-cycle-incidents", tags=["Crop Cycle Incidents"])
 
@@ -134,9 +135,14 @@ def create_crop_cycle(
     filtered_data = {k: v for k, v in data_dict.items() 
                      if k in model_fields and k not in excluded_fields and k != 'notes'}
     
+    # Generate incident ID if not provided
+    if 'incident_no' not in filtered_data or not filtered_data.get('incident_no'):
+        filtered_data['incident_no'] = generate_incident_id(db)
+    
     # Debug: Log what we're about to create
     print(f"Creating crop cycle with filtered data keys: {list(filtered_data.keys())}")
     print(f"Excluded from data_dict: {set(data_dict.keys()) - set(filtered_data.keys())}")
+    print(f"Generated incident_no: {filtered_data.get('incident_no')}")
     
     try:
         crop_cycle = CropCycleIncident(**filtered_data)
@@ -159,6 +165,7 @@ def create_crop_cycle(
         
         return CropCycleIncidentResponse(
             incident_id=crop_cycle.id,
+            incident_no=crop_cycle.incident_no,  # Auto-generated ID (IN0001, etc.)
             field_id=crop_cycle.field_code,
             crop_name=crop_cycle.crop_name,
             crop_variety=crop_cycle.seed_category,
@@ -306,6 +313,7 @@ def get_crop_cycle(
     
     return CropCycleIncidentResponse(
         incident_id=cycle.id,
+        incident_no=cycle.incident_no,  # Auto-generated ID (IN0001, etc.)
         field_id=cycle.field_code,
         crop_name=cycle.crop_name,
         crop_variety=cycle.seed_category,
@@ -401,6 +409,7 @@ def update_crop_cycle(
     
     return CropCycleIncidentResponse(
         incident_id=cycle.id,
+        incident_no=cycle.incident_no,  # Auto-generated ID (IN0001, etc.)
         field_id=cycle.field_code,
         crop_name=cycle.crop_name,
         crop_variety=cycle.seed_category,
@@ -491,6 +500,7 @@ def _construct_work_order_response(work_order: WorkOrder, crop_cycle_id: Optiona
     
     return WorkOrderResponse(
         work_order_id=work_order.id,
+        work_order_no=work_order.work_order_no,  # Auto-generated ID (WO0001, etc.)
         title=work_order.title,
         description=work_order.description or "",
         instructions=None,  # Not in database
@@ -512,6 +522,7 @@ def _construct_task_response(task: Task) -> TaskResponse:
     # on_hold_reason, resolution_notes are NOT in Task model - provide defaults
     return TaskResponse(
         task_id=task.id,
+        task_no=task.task_no,  # Auto-generated ID (TA0001, etc.)
         task_type=task.type,
         short_description=task.short_description or "",
         description=task.description,
@@ -597,6 +608,10 @@ def create_task(
     
     filtered_task_dict = {k: v for k, v in task_dict.items() if k in model_fields}
     
+    # Generate task ID if not provided
+    if 'task_no' not in filtered_task_dict or not filtered_task_dict.get('task_no'):
+        filtered_task_dict['task_no'] = generate_task_id(db)
+    
     task = Task(**filtered_task_dict, crop_cycle_id=crop_cycle_id, created_by=current_user.id)
     
     # Calculate total cost from resources if provided
@@ -675,12 +690,39 @@ def update_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update a task"""
+    """Update a task - requires mandatory notes when updating or closing"""
     task = db.query(Task).filter(Task.id == task_id, Task.crop_cycle_id == crop_cycle_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
+    # Validate mandatory notes when updating or closing
+    update_notes = data.update_notes
+    is_closing = data.status in [TaskStatus.CLOSED, TaskStatus.RESOLVED]
+    is_updating = any([
+        data.task_type is not None,
+        data.short_description is not None,
+        data.description is not None,
+        data.status is not None,
+    ])
+    
+    if (is_closing or is_updating) and (not update_notes or not update_notes.strip()):
+        raise HTTPException(
+            status_code=422,
+            detail="update_notes is mandatory when updating or closing a task. Please provide a reason for the update/closure."
+        )
+    
     update_dict = data.model_dump(exclude_unset=True)
+    
+    # Extract update_notes and append to description
+    update_notes_value = update_dict.pop('update_notes', None)
+    if update_notes_value:
+        # Append update notes to description with timestamp
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        note_entry = f"\n\n[Update {timestamp}]: {update_notes_value}"
+        if task.description:
+            task.description = task.description + note_entry
+        else:
+            task.description = note_entry.strip()
     
     # Map task_type to type
     if 'task_type' in update_dict:
@@ -830,6 +872,7 @@ def create_work_order(
         if not task:
             # Create a default task for this crop cycle
             default_task = Task(
+                task_no=generate_task_id(db),
                 crop_cycle_id=crop_cycle_id,
                 type='other',
                 short_description='Default Task',
@@ -875,6 +918,10 @@ def create_work_order(
     }
     
     filtered_data = {k: v for k, v in work_order_data.items() if k in model_fields}
+    
+    # Generate work order ID if not provided
+    if 'work_order_no' not in filtered_data or not filtered_data.get('work_order_no'):
+        filtered_data['work_order_no'] = generate_work_order_id(db)
     
     # Create work order with task_id
     work_order = WorkOrder(**filtered_data, task_id=task_id, created_by=current_user.id)

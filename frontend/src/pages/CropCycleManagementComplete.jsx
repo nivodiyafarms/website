@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, ArrowLeft, Edit, Trash2, FileText, Mic, ClipboardList, Package, AlertCircle } from 'lucide-react';
+import { Plus, ArrowLeft, Edit, Trash2, FileText, Mic, ClipboardList, Package, AlertCircle, X } from 'lucide-react';
 import WorkflowBar from '../components/WorkflowBar';
 import BreadcrumbNav from '../components/BreadcrumbNav';
 import CropCycleModal from '../components/CropCycleModal';
@@ -204,11 +204,28 @@ const CropCycleManagementComplete = () => {
   const handleSubmitTask = async (data) => {
     try {
       console.log('📤 Submitting task data:', data);
-      await cropCycleIncidentAPI.createTask(selectedCycle.incident_id, data);
+      
+      if (editingTask) {
+        // Update existing task
+        await cropCycleIncidentAPI.updateTask(selectedCycle.incident_id, editingTask.task_id, data);
+      } else {
+        // Create new task
+        await cropCycleIncidentAPI.createTask(selectedCycle.incident_id, data);
+      }
+      
       setShowTaskModal(false);
+      setEditingTask(null);
+      
+      // Reload data
+      if (viewMode === 'task-detail' && selectedTask) {
+        // If viewing task detail, reload task detail
+        const updatedTask = await cropCycleIncidentAPI.getTaskById(selectedCycle.incident_id, selectedTask.task_id);
+        setSelectedTask(updatedTask.data);
+      }
+      
       loadCycleDetail(selectedCycle.incident_id);
     } catch (error) {
-      console.error('❌ Failed to create task:', error);
+      console.error('❌ Failed to save task:', error);
       console.error('❌ Error response:', error.response?.data);
       console.error('❌ Error status:', error.response?.status);
       
@@ -229,9 +246,14 @@ const CropCycleManagementComplete = () => {
           alert(`Error: ${JSON.stringify(detail, null, 2)}`);
         }
       } else {
-        alert('Failed to create task. Check console for details.');
+        alert('Failed to save task. Check console for details.');
       }
     }
+  };
+  
+  const handleEditTask = (task) => {
+    setEditingTask(task);
+    setShowTaskModal(true);
   };
 
   const handleCreateWorkOrder = () => {
@@ -646,7 +668,7 @@ const CropCycleManagementComplete = () => {
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">{selectedTask.short_description}</h2>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-3">
               {selectedTask.severity && (
                 <span className={`px-3 py-1 rounded text-sm font-bold ${getSeverityColor(selectedTask.severity)}`}>
                   {selectedTask.severity}
@@ -655,6 +677,29 @@ const CropCycleManagementComplete = () => {
               <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(selectedTask.status)}`}>
                 {selectedTask.status}
               </span>
+              {/* Edit and Close buttons */}
+              {selectedTask.status !== 'closed' && selectedTask.status !== 'बंद' && (
+                <>
+                  <button
+                    onClick={() => handleEditTask(selectedTask)}
+                    className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span>Edit Task</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to close this task? You will need to provide a reason.')) {
+                        handleEditTask({ ...selectedTask, status: 'बंद' });
+                      }
+                    }}
+                    className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>Close Task</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 

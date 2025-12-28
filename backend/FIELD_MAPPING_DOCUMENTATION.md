@@ -166,3 +166,4 @@ work_order_resources (id)
 - **Crop Cycle `status`**: Defaults to `CropCycleStatus.OPEN` if None
 - **Work Order `task_id`**: Created automatically if not provided (finds or creates default task for crop cycle)
 
+

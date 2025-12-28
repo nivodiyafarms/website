@@ -244,6 +244,9 @@ export function transformTaskRequest(data) {
   if (data.sub_type !== undefined) transformed.sub_type = data.sub_type;
   if (data.occurred_at !== undefined) transformed.occurred_at = formatDate(data.occurred_at);
   if (data.resolved_at !== undefined) transformed.resolved_at = formatDate(data.resolved_at);
+  
+  // Handle update_notes for task updates
+  if (data.update_notes !== undefined) transformed.update_notes = data.update_notes;
 
   // Calculate cost from resources array
   if (data.resources && Array.isArray(data.resources)) {

@@ -44,6 +44,7 @@ class CropCycleIncidentUpdate(BaseModel):
 
 class CropCycleIncidentResponse(CropCycleIncidentBase):
     incident_id: UUID
+    incident_no: Optional[str] = None  # Auto-generated ID (IN0001, IN0002, etc.)
     opened_at: datetime
     updated_at: datetime
     closed_at: Optional[datetime] = None
@@ -134,10 +135,12 @@ class TaskUpdate(BaseModel):
     approved_by_id: Optional[UUID] = None
     gps_lat: Optional[float] = None
     gps_lng: Optional[float] = None
+    update_notes: Optional[str] = None  # Mandatory notes when updating/closing task
 
 
 class TaskResponse(TaskBase):
     task_id: UUID
+    task_no: Optional[str] = None  # Auto-generated ID (TA0001, TA0002, etc.)
     crop_cycle_id: UUID
     created_by_id: UUID
     approved_by_id: Optional[UUID]
@@ -186,6 +189,7 @@ class WorkOrderUpdate(BaseModel):
 
 class WorkOrderResponse(WorkOrderBase):
     work_order_id: UUID
+    work_order_no: Optional[str] = None  # Auto-generated ID (WO0001, WO0002, etc.)
     crop_cycle_id: UUID
     created_by_id: UUID
     status: WorkOrderStatus
