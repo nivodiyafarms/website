@@ -87,6 +87,7 @@ const CropCycleManagementComplete = () => {
       
       setSelectedCycle(cycleRes.data);
       setTasks(tasksRes.data);
+      console.log('📋 Loaded work orders:', ordersRes.data);
       setWorkOrders(ordersRes.data);
       setViewMode('cycle-detail');
       setBreadcrumb([
@@ -154,6 +155,8 @@ const CropCycleManagementComplete = () => {
 
   const handleSubmitCycle = async (data) => {
     try {
+      console.log('📤 Submitting crop cycle data:', data);
+      
       if (editingCycle) {
         await cropCycleIncidentAPI.updateCycle(editingCycle.incident_id, data);
       } else {
@@ -168,8 +171,28 @@ const CropCycleManagementComplete = () => {
         loadCycleDetail(selectedCycle.incident_id);
       }
     } catch (error) {
-      console.error('Failed to save crop cycle:', error);
-      alert(error.response?.data?.detail || 'Failed to save crop cycle');
+      console.error('❌ Failed to save crop cycle:', error);
+      console.error('❌ Error response:', error.response);
+      console.error('❌ Error status:', error.response?.status);
+      console.error('❌ Error data:', error.response?.data);
+      
+      // Show detailed error message
+      const errorDetails = error.response?.data?.detail || 'Failed to save crop cycle';
+      if (Array.isArray(errorDetails)) {
+        // Pydantic validation errors
+        const errorMessages = errorDetails.map(err => 
+          `${err.loc?.join('.') || 'unknown'}: ${err.msg || err}`
+        ).join('\n');
+        console.error('📋 Validation Errors:', errorMessages);
+        alert(`Validation Errors:\n${errorMessages}`);
+      } else if (typeof errorDetails === 'object') {
+        // Object error details
+        console.error('📋 Error Details Object:', JSON.stringify(errorDetails, null, 2));
+        alert(`Error: ${JSON.stringify(errorDetails, null, 2)}`);
+      } else {
+        console.error('📋 Error Details:', errorDetails);
+        alert(errorDetails);
+      }
     }
   };
 
@@ -180,12 +203,34 @@ const CropCycleManagementComplete = () => {
 
   const handleSubmitTask = async (data) => {
     try {
+      console.log('📤 Submitting task data:', data);
       await cropCycleIncidentAPI.createTask(selectedCycle.incident_id, data);
       setShowTaskModal(false);
       loadCycleDetail(selectedCycle.incident_id);
     } catch (error) {
-      console.error('Failed to create task:', error);
-      alert(error.response?.data?.detail || 'Failed to create task');
+      console.error('❌ Failed to create task:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      
+      // Parse Pydantic validation errors
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        if (Array.isArray(detail)) {
+          // Pydantic validation errors
+          const errorMessages = detail.map(err => {
+            const field = err.loc?.join('.') || 'unknown';
+            const msg = err.msg || 'validation error';
+            return `${field}: ${msg}`;
+          }).join('\n');
+          alert(`Validation errors:\n${errorMessages}`);
+        } else if (typeof detail === 'string') {
+          alert(`Error: ${detail}`);
+        } else {
+          alert(`Error: ${JSON.stringify(detail, null, 2)}`);
+        }
+      } else {
+        alert('Failed to create task. Check console for details.');
+      }
     }
   };
 
@@ -193,14 +238,27 @@ const CropCycleManagementComplete = () => {
     setEditingWorkOrder(null);
     setShowWorkOrderModal(true);
   };
+  
+  // Pass task_id when creating work order from task detail view
+  const handleSubmitWorkOrderWithTask = async (data) => {
+    if (selectedTask && selectedTask.task_id) {
+      data.task_id = selectedTask.task_id;
+    }
+    return handleSubmitWorkOrder(data);
+  };
 
   const handleSubmitWorkOrder = async (data) => {
     try {
-      await cropCycleIncidentAPI.createWorkOrder(selectedCycle.incident_id, data);
+      console.log('📤 Creating work order with data:', data);
+      const response = await cropCycleIncidentAPI.createWorkOrder(selectedCycle.incident_id, data);
+      console.log('✅ Work order created, response:', response.data);
       setShowWorkOrderModal(false);
-      loadCycleDetail(selectedCycle.incident_id);
+      // Reload cycle detail to refresh work orders
+      await loadCycleDetail(selectedCycle.incident_id);
+      console.log('🔄 Cycle detail reloaded, work orders:', workOrders);
     } catch (error) {
-      console.error('Failed to create work order:', error);
+      console.error('❌ Failed to create work order:', error);
+      console.error('❌ Error response:', error.response?.data);
       alert(error.response?.data?.detail || 'Failed to create work order');
     }
   };
@@ -704,16 +762,43 @@ const CropCycleManagementComplete = () => {
             {(() => {
               // Filter work orders that are linked to this task
               const taskWorkOrders = workOrders.filter(order => {
-                if (!order.linked_task_ids) return false;
+                console.log('🔍 Checking work order:', {
+                  work_order_id: order.work_order_id,
+                  linked_task_ids: order.linked_task_ids,
+                  selectedTask_task_id: selectedTask.task_id,
+                  order_title: order.title
+                });
+                
+                if (!order.linked_task_ids) {
+                  console.log('  ❌ No linked_task_ids');
+                  return false;
+                }
+                
                 try {
                   const linkedTasks = typeof order.linked_task_ids === 'string' 
                     ? JSON.parse(order.linked_task_ids) 
                     : order.linked_task_ids;
-                  return Array.isArray(linkedTasks) && linkedTasks.includes(selectedTask.task_id);
-                } catch {
+                  
+                  console.log('  📝 Parsed linked tasks:', linkedTasks);
+                  console.log('  🔑 Selected task ID:', selectedTask.task_id);
+                  console.log('  ✅ Includes?', Array.isArray(linkedTasks) && linkedTasks.includes(selectedTask.task_id));
+                  
+                  // Also check if task_id matches as string
+                  const taskIdStr = String(selectedTask.task_id);
+                  const matches = Array.isArray(linkedTasks) && (
+                    linkedTasks.includes(selectedTask.task_id) || 
+                    linkedTasks.includes(taskIdStr) ||
+                    linkedTasks.some(id => String(id) === taskIdStr || String(id) === String(selectedTask.task_id))
+                  );
+                  
+                  return matches;
+                } catch (error) {
+                  console.error('  ❌ Error parsing linked_task_ids:', error);
                   return false;
                 }
               });
+              
+              console.log('📊 Filtered work orders for task:', taskWorkOrders.length, taskWorkOrders);
 
               return taskWorkOrders.length === 0 ? (
                 <div className="text-center py-8 bg-gray-50 rounded-lg">
@@ -807,7 +892,7 @@ const CropCycleManagementComplete = () => {
         <WorkOrderModal
           isOpen={showWorkOrderModal}
           onClose={() => { setShowWorkOrderModal(false); setEditingWorkOrder(null); }}
-          onSubmit={handleSubmitWorkOrder}
+          onSubmit={handleSubmitWorkOrderWithTask}
           cropCycleId={selectedCycle.incident_id}
           workers={users}
           editing={editingWorkOrder}

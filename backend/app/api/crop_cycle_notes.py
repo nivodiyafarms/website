@@ -116,12 +116,22 @@ def get_notes(
         CropCycleNote.created_at.asc()  # Oldest first for chat-like interface
     ).offset(skip).limit(limit).all()
     
-    # Prepare responses
+    # Prepare responses - manually construct to handle missing fields
     responses = []
     for note in notes:
-        response = CropCycleNoteResponse.model_validate(note)
-        response.user_name = note.user.name if note.user else None
-        response.user_email = note.user.phone if note.user else None  # Using phone as identifier
+        # Manually construct response with defaults for missing fields
+        response = CropCycleNoteResponse(
+            note_id=note.id,
+            crop_cycle_id=note.related_id if note.related_type == 'crop_cycle' else None,
+            user_id=note.author_id,
+            content=note.text or "",
+            image_path=note.media_url,
+            source="web",  # Default value - not in database
+            created_at=note.created_at or datetime.utcnow(),
+            updated_at=note.created_at or datetime.utcnow(),  # Use created_at if updated_at doesn't exist
+            user_name=note.user.name if note.user else None,
+            user_email=note.user.phone if note.user else None  # Using phone as identifier
+        )
         responses.append(response)
     
     return responses

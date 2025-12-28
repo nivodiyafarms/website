@@ -150,3 +150,36 @@ class CropCycle(Base):
     def supervisor_id(self):
         """Alias for created_by for backward compatibility"""
         return self.created_by
+    
+    # Properties for CropCycleIncidentResponse compatibility
+    @property
+    def is_voice_recorded(self):
+        """Default value for is_voice_recorded (not in database)"""
+        return "no"
+    
+    @property
+    def audio_file_path(self):
+        """Default value for audio_file_path (not in database)"""
+        return None
+    
+    @property
+    def transcript(self):
+        """Default value for transcript (not in database)"""
+        return None
+    
+    # Property to convert Date to datetime for response schema
+    @property
+    def sowing_date_datetime(self):
+        """Convert sowing_date (Date) to datetime for response"""
+        if self.sowing_date:
+            from datetime import datetime
+            return datetime.combine(self.sowing_date, datetime.min.time())
+        return None
+    
+    @property
+    def expected_harvest_date_datetime(self):
+        """Convert expected_harvest_date (Date) to datetime for response"""
+        if self.expected_harvest_date:
+            from datetime import datetime
+            return datetime.combine(self.expected_harvest_date, datetime.min.time())
+        return None

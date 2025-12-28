@@ -131,55 +131,78 @@ export function transformCropCycleRequest(data) {
   const currentUser = getCurrentUser();
   const transformed = {};
 
-  // Field name mappings
-  if (data.khet !== undefined) transformed.field_id = data.khet;
-  if (data.buwaiDate !== undefined) transformed.sowing_date = formatDate(data.buwaiDate);
-  if (data.katayiDate !== undefined) transformed.expected_harvest_date = formatDate(data.katayiDate);
-  if (data.vartman_charan !== undefined) {
+  // Helper function to check if value is not empty
+  const hasValue = (val) => val !== undefined && val !== null && val !== '';
+
+  // Field name mappings - only include if not empty
+  if (hasValue(data.khet)) transformed.field_id = data.khet;
+  if (hasValue(data.buwaiDate)) {
+    const formattedDate = formatDate(data.buwaiDate);
+    if (formattedDate) transformed.sowing_date = formattedDate;
+  }
+  if (hasValue(data.katayiDate)) {
+    const formattedDate = formatDate(data.katayiDate);
+    if (formattedDate) transformed.expected_harvest_date = formattedDate;
+  }
+  if (hasValue(data.vartman_charan)) {
     transformed.current_stage = STAGE_MAPPING[data.vartman_charan] || data.vartman_charan;
   }
-  if (data.varnan !== undefined) transformed.description = data.varnan;
-  if (data.tipanni !== undefined) transformed.notes = data.tipanni;
-  if (data.season !== undefined) transformed.season = data.season;
-  if (data.fasal_naam !== undefined) transformed.crop_name = data.fasal_naam;
-  if (data.beej_category !== undefined) transformed.crop_variety = data.beej_category;
-  if (data.sthiti !== undefined) {
+  if (hasValue(data.varnan)) transformed.description = data.varnan;
+  if (hasValue(data.tipanni)) transformed.notes = data.tipanni;
+  if (hasValue(data.season)) transformed.season = data.season;
+  if (hasValue(data.fasal_naam)) transformed.crop_name = data.fasal_naam;
+  if (hasValue(data.beej_category)) transformed.crop_variety = data.beej_category;
+  if (hasValue(data.sthiti)) {
     transformed.status = STATUS_MAPPING[data.sthiti] || data.sthiti;
   }
 
   // Handle English field names (for updates or direct API calls)
-  if (data.field_id !== undefined) transformed.field_id = data.field_id;
-  if (data.sowing_date !== undefined) transformed.sowing_date = formatDate(data.sowing_date);
-  if (data.expected_harvest_date !== undefined) transformed.expected_harvest_date = formatDate(data.expected_harvest_date);
-  if (data.current_stage !== undefined) {
+  if (hasValue(data.field_id)) transformed.field_id = data.field_id;
+  if (hasValue(data.sowing_date)) {
+    const formattedDate = formatDate(data.sowing_date);
+    if (formattedDate) transformed.sowing_date = formattedDate;
+  }
+  if (hasValue(data.expected_harvest_date)) {
+    const formattedDate = formatDate(data.expected_harvest_date);
+    if (formattedDate) transformed.expected_harvest_date = formattedDate;
+  }
+  if (hasValue(data.current_stage)) {
     // If it's already English, check if it needs mapping
     transformed.current_stage = STAGE_MAPPING[data.current_stage] || data.current_stage;
   }
-  if (data.description !== undefined) transformed.description = data.description;
-  if (data.notes !== undefined) transformed.notes = data.notes;
-  if (data.season !== undefined) transformed.season = data.season;
-  if (data.crop_name !== undefined) transformed.crop_name = data.crop_name;
-  if (data.crop_variety !== undefined) transformed.crop_variety = data.crop_variety;
-  if (data.status !== undefined) {
+  if (hasValue(data.description)) transformed.description = data.description;
+  if (hasValue(data.notes)) transformed.notes = data.notes;
+  if (hasValue(data.season)) transformed.season = data.season;
+  if (hasValue(data.crop_name)) transformed.crop_name = data.crop_name;
+  if (hasValue(data.crop_variety)) transformed.crop_variety = data.crop_variety;
+  if (hasValue(data.status)) {
     transformed.status = STATUS_MAPPING[data.status] || data.status;
   }
 
-  // Set supervisor_id from current user
-  if (data.supervisor_id !== undefined) {
+  // Set supervisor_id from current user - REQUIRED FIELD
+  if (hasValue(data.supervisor_id)) {
     transformed.supervisor_id = data.supervisor_id;
   } else if (currentUser?.id) {
     transformed.supervisor_id = currentUser.id;
+  } else if (currentUser?.user_id) {
+    // Check for user_id as fallback (some APIs return user_id instead of id)
+    transformed.supervisor_id = currentUser.user_id;
+  } else {
+    console.warn('⚠️ No supervisor_id available - user may not be logged in');
   }
 
   // Copy other fields that might be present
-  if (data.short_description !== undefined) transformed.short_description = data.short_description;
+  if (hasValue(data.short_description)) transformed.short_description = data.short_description;
   if (data.incident_id !== undefined) transformed.incident_id = data.incident_id; // For updates
 
-  // Ensure season is included (required field)
-  if (!transformed.season && data.season === undefined) {
-    // Try to infer from other fields or set default
-    transformed.season = data.season || null;
-  }
+  // Log transformation result for debugging
+  console.log('🔄 Transformation result:', transformed);
+  console.log('🔄 Required fields check:', {
+    field_id: !!transformed.field_id,
+    crop_name: !!transformed.crop_name,
+    sowing_date: !!transformed.sowing_date,
+    supervisor_id: !!transformed.supervisor_id
+  });
 
   return transformed;
 }
@@ -190,13 +213,26 @@ export function transformCropCycleRequest(data) {
 export function transformTaskRequest(data) {
   if (!data || typeof data !== 'object') return data;
 
+  console.log('🔄 Task transformer - Input data:', data);
+
   const currentUser = getCurrentUser();
   const transformed = {};
 
   // Field name mappings
-  if (data.category !== undefined) {
+  // CRITICAL: task_type is required by database (type NOT NULL)
+  if (data.category !== undefined && data.category) {
     transformed.task_type = TASK_TYPE_MAPPING[data.category] || data.category || 'other';
+  } else if (data.task_type !== undefined && data.task_type) {
+    transformed.task_type = TASK_TYPE_MAPPING[data.task_type] || data.task_type;
+  } else if (data.type !== undefined && data.type) {
+    transformed.task_type = TASK_TYPE_MAPPING[data.type] || data.type;
+  } else {
+    // Always ensure task_type is set - required by database
+    transformed.task_type = 'other';
   }
+  
+  console.log('🔄 Task transformer - task_type set to:', transformed.task_type);
+  
   if (data.sub_category !== undefined) transformed.sub_type = data.sub_category;
   if (data.short_description !== undefined) transformed.short_description = data.short_description;
   if (data.description !== undefined) transformed.description = data.description;
@@ -205,15 +241,6 @@ export function transformTaskRequest(data) {
   }
   if (data.opened_date !== undefined) transformed.occurred_at = formatDate(data.opened_date);
   if (data.expected_resolution_date !== undefined) transformed.resolved_at = formatDate(data.expected_resolution_date);
-
-  // Handle English field names (for updates)
-  if (data.task_type !== undefined) {
-    transformed.task_type = TASK_TYPE_MAPPING[data.task_type] || data.task_type;
-  }
-  if (data.type !== undefined) {
-    // Backend schema expects task_type, but some code might send type
-    transformed.task_type = TASK_TYPE_MAPPING[data.type] || data.type;
-  }
   if (data.sub_type !== undefined) transformed.sub_type = data.sub_type;
   if (data.occurred_at !== undefined) transformed.occurred_at = formatDate(data.occurred_at);
   if (data.resolved_at !== undefined) transformed.resolved_at = formatDate(data.resolved_at);
@@ -229,16 +256,26 @@ export function transformTaskRequest(data) {
     transformed.cost = 0;
   }
 
-  // Handle assigned_to_id (schema requires it)
-  if (data.assigned_to_id !== undefined) {
+  // Handle assigned_to_id - optional, Task model doesn't have this field
+  // Only set if it's a valid UUID (not a string name like "sad")
+  // Helper function to check if string is a valid UUID
+  const isValidUUID = (str) => {
+    if (!str || typeof str !== 'string') return false;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
+  
+  if (data.assigned_to_id !== undefined && isValidUUID(data.assigned_to_id)) {
     transformed.assigned_to_id = data.assigned_to_id;
-  } else if (data.opened_by !== undefined) {
-    // Map opened_by to assigned_to_id if present
+  } else if (data.opened_by !== undefined && isValidUUID(data.opened_by)) {
+    // Only use opened_by if it's a valid UUID
     transformed.assigned_to_id = data.opened_by;
-  } else if (currentUser?.id) {
-    // Use current user as fallback (required by schema)
+  } else if (currentUser?.id && isValidUUID(currentUser.id)) {
     transformed.assigned_to_id = currentUser.id;
+  } else if (currentUser?.user_id && isValidUUID(currentUser.user_id)) {
+    transformed.assigned_to_id = currentUser.user_id;
   }
+  // If none of the above are valid UUIDs, don't set assigned_to_id (leave it undefined)
 
   // Set created_by from current user (backend will override with current_user.id)
   // But include it in case backend needs it
@@ -246,14 +283,23 @@ export function transformTaskRequest(data) {
     transformed.created_by = data.created_by;
   } else if (currentUser?.id) {
     transformed.created_by = currentUser.id;
+  } else if (currentUser?.user_id) {
+    transformed.created_by = currentUser.user_id;
   }
 
-  // Copy crop_cycle_id if present
-  if (data.crop_cycle_id !== undefined) transformed.crop_cycle_id = data.crop_cycle_id;
+  // crop_cycle_id comes from URL path parameter, not request body
+  // Don't include it - backend gets it from URL: /crop-cycle-incidents/{crop_cycle_id}/tasks
 
   // Remove fields not in backend schema
   // hold_reason, cancel_reason, resolution_comments, observation are removed
   // resources is kept for backend to process
+
+  console.log('🔄 Task transformer - Output data:', transformed);
+  console.log('🔄 Task transformer - Required fields check:', {
+    task_type: !!transformed.task_type,
+    short_description: transformed.short_description !== undefined,
+    crop_cycle_id: !!transformed.crop_cycle_id
+  });
 
   return transformed;
 }
@@ -293,10 +339,15 @@ export function transformWorkOrderRequest(data) {
     transformed.created_by = data.created_by;
   } else if (currentUser?.id) {
     transformed.created_by = currentUser.id;
+  } else if (currentUser?.user_id) {
+    transformed.created_by = currentUser.user_id;
   }
 
   // Copy crop_cycle_id if present
   if (data.crop_cycle_id !== undefined) transformed.crop_cycle_id = data.crop_cycle_id;
+  
+  // Copy task_id if present (for linking work order to task)
+  if (data.task_id !== undefined) transformed.task_id = data.task_id;
 
   // Remove fields not in backend schema
   // holdReason, expectedDate, resolutionComments, observation, comments, attachments are removed
@@ -368,8 +419,15 @@ export function transformWorkOrderResponse(data) {
   const transformed = { ...data };
 
   // Map backend field names to frontend expected names
-  if (data.id !== undefined) transformed.work_order_id = data.id;
-  if (data.title !== undefined) transformed.shortDesc = data.title; // For frontend compatibility
+  // Backend returns work_order_id, but also check for id as fallback
+  if (data.work_order_id !== undefined) {
+    transformed.work_order_id = data.work_order_id;
+  } else if (data.id !== undefined) {
+    transformed.work_order_id = data.id;
+  }
+  
+  // Map title to shortDesc for frontend compatibility
+  if (data.title !== undefined) transformed.shortDesc = data.title;
   
   // Map created_by to created_by_id if needed
   if (data.created_by !== undefined && !data.created_by_id) {
@@ -381,7 +439,7 @@ export function transformWorkOrderResponse(data) {
     transformed.assigned_to_id = data.assigned_to;
   }
 
-  // Keep original fields
+  // Keep original fields for backward compatibility
   return transformed;
 }
 

@@ -10,6 +10,8 @@ from app.database import Base
 class TaskType(str, enum.Enum):
     """Task types - used for validation, stored as TEXT in database"""
     IRRIGATION = "irrigation"
+    ELECTRICAL = "electrical"  # Added for frontend compatibility
+    ROAD = "road"  # Added for frontend compatibility
     FERTILIZER = "fertilizer"
     PESTICIDE = "pesticide"
     FUNGICIDE = "fungicide"

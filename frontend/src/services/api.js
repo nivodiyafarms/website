@@ -42,16 +42,38 @@ api.interceptors.request.use(
         try {
           if (isTaskUrl(config.url)) {
             // Transform task request
+            console.log('🔵 BEFORE TASK TRANSFORMATION:', JSON.stringify(config.data, null, 2));
             config.data = transformTaskRequest(config.data);
+            console.log('🟢 AFTER TASK TRANSFORMATION:', JSON.stringify(config.data, null, 2));
           } else if (isWorkOrderUrl(config.url)) {
             // Transform work order request
             config.data = transformWorkOrderRequest(config.data);
           } else {
+            // Log BEFORE transformation
+            console.log('🔵 BEFORE TRANSFORMATION:', JSON.stringify(config.data, null, 2));
+            const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+            console.log('🔵 Current User:', currentUser);
+            console.log('🔵 User ID (id):', currentUser?.id);
+            console.log('🔵 User ID (user_id):', currentUser?.user_id);
+            const userId = currentUser?.id || currentUser?.user_id;
+            console.log('🔵 Using User ID:', userId);
+            console.log('🔵 Is UUID?', /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId || ''));
+            
             // Transform crop cycle request
             config.data = transformCropCycleRequest(config.data);
+            
+            // Log AFTER transformation
+            console.log('🟢 AFTER TRANSFORMATION:', JSON.stringify(config.data, null, 2));
+            
+            // Validate required fields
+            const requiredFields = ['field_id', 'crop_name', 'sowing_date', 'supervisor_id'];
+            const missingFields = requiredFields.filter(field => !config.data[field]);
+            if (missingFields.length > 0) {
+              console.warn('⚠️ Missing required fields:', missingFields);
+            }
           }
         } catch (error) {
-          console.error('Error transforming request data:', error);
+          console.error('❌ Error transforming request data:', error);
           // Continue with original data if transformation fails
         }
       }
