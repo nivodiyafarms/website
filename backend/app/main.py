@@ -2,14 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.database import engine, Base
-from app.api import auth, users, fields, crop_cycles, crops, materials, equipment, crop_cycle_incidents, crop_cycle_notes, chatbot
+from app.api import auth, users, fields, crop_cycles, crops, materials, equipment, crop_cycle_incidents, crop_cycle_notes, chatbot, general_expenses
 import os
 from sqlalchemy import text
 
 # Import all models to ensure they are registered with SQLAlchemy Base
 from app.models import (
     User, Field, CropCatalog, Material, Equipment, CropCycle,
-    CropCycleNote, CropCycleIncident, Task, WorkOrder, WorkOrderResource, Note
+    CropCycleNote, CropCycleIncident, Task, WorkOrder, WorkOrderResource, Note, GeneralExpense
 )
 
 app = FastAPI(
@@ -43,6 +43,7 @@ app.include_router(equipment.router)
 app.include_router(crop_cycle_incidents.router)
 app.include_router(crop_cycle_notes.router)
 app.include_router(chatbot.router)
+app.include_router(general_expenses.router)
 
 
 @app.get("/")

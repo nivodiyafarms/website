@@ -12,7 +12,7 @@ const NotesInterface = ({ cropCycleId }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const notesEndRef = useRef(null);
   const fileInputRef = useRef(null);
-
+  const notesContainerRef = useRef(null);
   const [previousNotesCount, setPreviousNotesCount] = useState(0);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 

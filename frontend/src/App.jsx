@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import CropCycleManagementComplete from './pages/CropCycleManagementComplete';
+import GeneralPurpose from './pages/GeneralPurpose';
 
 function App() {
   return (
@@ -29,6 +30,16 @@ function App() {
               <PrivateRoute>
                 <Layout>
                   <CropCycleManagementComplete />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/general-purpose"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <GeneralPurpose />
                 </Layout>
               </PrivateRoute>
             }
