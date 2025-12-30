@@ -3,13 +3,25 @@ import { X, ClipboardList, Bot } from 'lucide-react';
 import ChatbotModal from './ChatbotModal';
 import VoiceRecorder from './VoiceRecorder';
 
-const WorkOrderModal = ({ isOpen, onClose, onSubmit, cropCycleId, workers, editing = null }) => {
+const WorkOrderModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  cropCycleId,
+  workers,
+  editing = null,
+}) => {
+  const [activeTab, setActiveTab] = useState('notes');
+  const [showChatbot, setShowChatbot] = useState(false);
+
   const [formData, setFormData] = useState({
+    workOrderId: '',
     shortDesc: '',
     description: '',
     instructions: '',
+    opened_by: '',
     assigned_to_id: '',
-    status: 'New',
+    status: 'current',
     holdReason: '',
     expectedDate: '',
     actualResolvedDate: '',
@@ -20,17 +32,17 @@ const WorkOrderModal = ({ isOpen, onClose, onSubmit, cropCycleId, workers, editi
     due_date: '',
   });
 
-  const [showChatbot, setShowChatbot] = useState(false);
-
-  // Load editing data
+  /* ================= LOAD EDIT DATA ================= */
   useEffect(() => {
     if (editing) {
       setFormData({
+        workOrderId: editing.workOrderId || '',
         shortDesc: editing.shortDesc || '',
         description: editing.description || '',
         instructions: editing.instructions || '',
+        opened_by: editing.opened_by || '',
         assigned_to_id: editing.assigned_to_id || '',
-        status: editing.status || 'New',
+        status: editing.status || 'current',
         holdReason: editing.holdReason || '',
         expectedDate: editing.expectedDate || '',
         actualResolvedDate: editing.actualResolvedDate || '',
@@ -40,164 +52,182 @@ const WorkOrderModal = ({ isOpen, onClose, onSubmit, cropCycleId, workers, editi
         attachments: editing.attachments || [],
         due_date: editing.due_date ? editing.due_date.split('T')[0] : '',
       });
+
+      if (editing.status === 'Resolved') {
+        setActiveTab('resolution');
+      }
     }
   }, [editing]);
 
+  /* ================= HANDLERS ================= */
   const handleChange = (field, value) => {
-    if (field === 'status' && value !== 'On Hold') {
-      setFormData({ ...formData, status: value, holdReason: '' });
-    } else {
-      setFormData({ ...formData, [field]: value });
+    if (field === 'status') {
+      setFormData((prev) => ({
+        ...prev,
+        status: value,
+        holdReason: value === 'On Hold' ? prev.holdReason : '',
+        actualResolvedDate:
+          value === 'Resolved'
+            ? new Date().toISOString().split('T')[0]
+            : prev.actualResolvedDate,
+      }));
+
+      setActiveTab(value === 'Resolved' ? 'resolution' : 'notes');
+      return;
     }
+
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleFileChange = (e) => {
     setFormData({ ...formData, attachments: Array.from(e.target.files) });
   };
 
-  const handleVoiceRecordingComplete = async (blob, fieldName) => {
+  const handleVoiceRecordingComplete = async (blob, field) => {
     try {
-      const uploadData = new FormData();
-      uploadData.append('file', blob, 'recording.wav');
+      const fd = new FormData();
+      fd.append('file', blob, 'recording.wav');
 
-      const response = await fetch(
+      const res = await fetch(
         `http://localhost:8000/crop-cycle-incidents/${cropCycleId}/tasks/voice/upload`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-          body: uploadData,
+          body: fd,
         }
       );
 
-      const result = await response.json();
-      if (result.transcript) {
-        setFormData((prev) => ({
-          ...prev,
-          [fieldName]: (prev[fieldName] + ' ' + result.transcript).trim(),
+      const data = await res.json();
+      if (data.transcript) {
+        setFormData((p) => ({
+          ...p,
+          [field]: `${p[field]} ${data.transcript}`.trim(),
         }));
       }
-    } catch (error) {
-      console.error('Voice recording failed:', error);
+    } catch {
       alert('Voice recording failed');
     }
   };
 
-  const handleChatbotComplete = (data) => {
-    setFormData((prev) => ({
-      ...prev,
-      ...data.form_data,
-    }));
-    setShowChatbot(false);
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
+
     if (!formData.shortDesc || !formData.description || !formData.assigned_to_id) {
-      alert('Please fill in Short Description, Description, and Assigned To.');
+      alert('संक्षिप्त विवरण, विवरण और Assigned To आवश्यक है');
       return;
     }
-    const payload = {
+
+    onSubmit({
       crop_cycle_id: cropCycleId,
       ...formData,
       due_date: formData.due_date || null,
-    };
-    onSubmit(payload);
+    });
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b">
-          <div className="flex items-center space-x-3">
-            <ClipboardList className="w-6 h-6 text-primary-600" />
-            <h2 className="text-2xl font-bold text-gray-900">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white w-full max-w-5xl rounded-3xl shadow-xl max-h-[90vh] overflow-y-auto"
+      >
+        {/* ================= HEADER ================= */}
+        <div className="flex justify-between items-center px-6 py-4 bg-green-600 text-white rounded-t-3xl">
+          <div className="flex items-center gap-2">
+            <ClipboardList />
+            <h2 className="text-xl font-bold">
               {editing ? 'Edit Work Order' : 'Create Work Order'}
             </h2>
           </div>
-          <div className="flex items-center space-x-2">
+
+          <div className="flex gap-3">
             {!editing && (
               <button
+                type="button"
                 onClick={() => setShowChatbot(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                className="bg-blue-600 px-3 py-1 rounded flex gap-2"
               >
-                <Bot className="w-4 h-4" />
-                <span>AI Assistant</span>
+                <Bot size={18} /> AI
               </button>
             )}
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <X className="w-6 h-6" />
+            <button type="button" onClick={onClose}>
+              <X />
             </button>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Short Description */}
+        {/* ================= BODY ================= */}
+        <div className="p-6 space-y-6">
+
+          {/* WORK ORDER ID */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              संक्षिप्त विवरण *
-            </label>
+            <label className="font-medium">Work Order ID</label>
             <input
-              type="text"
+              className="w-full border p-2 rounded-xl bg-gray-100"
+              value={formData.workOrderId}
+              onChange={(e) => handleChange('workOrderId', e.target.value)}
+            />
+          </div>
+
+          {/* SHORT DESCRIPTION */}
+          <div>
+            <label className="font-medium">संक्षिप्त विवरण *</label>
+            <input
+              className="w-full border p-2 rounded-xl"
               value={formData.shortDesc}
               onChange={(e) => handleChange('shortDesc', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              placeholder="Short description of work order"
               required
             />
           </div>
 
-          {/* Description */}
+          {/* DESCRIPTION */}
           <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-2">विवरण *</label>
+            <label className="font-medium">विवरण *</label>
             <textarea
+              rows={3}
+              className="w-full border rounded-xl p-2 pr-12"
               value={formData.description}
               onChange={(e) => handleChange('description', e.target.value)}
-              rows={4}
-              className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              placeholder="Detailed description"
-              required
             />
             <VoiceRecorder
-              onRecordingComplete={(blob) => handleVoiceRecordingComplete(blob, 'description')}
+              onRecordingComplete={(blob) =>
+                handleVoiceRecordingComplete(blob, 'description')
+              }
               customButton
-              buttonClassName="absolute top-2 right-2 p-2 rounded-lg transition"
-              iconClassName="w-5 h-5"
+              buttonClassName="absolute top-2 right-2"
             />
           </div>
 
-          {/* Instructions */}
+          {/* INSTRUCTIONS */}
           <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              अतिरिक्त निर्देश
-            </label>
+            <label className="font-medium">सौंपा गया (नाम)</label>
             <textarea
+              rows={2}
+              className="w-full border rounded-xl p-2 pr-12"
               value={formData.instructions}
               onChange={(e) => handleChange('instructions', e.target.value)}
-              rows={3}
-              className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-              placeholder="Optional instructions"
             />
             <VoiceRecorder
-              onRecordingComplete={(blob) => handleVoiceRecordingComplete(blob, 'instructions')}
+              onRecordingComplete={(blob) =>
+                handleVoiceRecordingComplete(blob, 'instructions')
+              }
               customButton
-              buttonClassName="absolute top-2 right-2 p-2 rounded-lg transition"
-              iconClassName="w-5 h-5"
+              buttonClassName="absolute top-2 right-2"
             />
           </div>
 
-          {/* Assigned & Due Date */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* ASSIGNED + DUE DATE */}
+          <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">को सौंपना*</label>
+              <label className="font-medium">को सौंपना *</label>
               <select
+                className="w-full border p-2 rounded-xl"
                 value={formData.assigned_to_id}
                 onChange={(e) => handleChange('assigned_to_id', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
                 required
               >
-                <option value="">कार्यकर्ता का चयन करें</option>
+                <option value="">कार्यकर्ता चुनें</option>
                 {workers.map((w) => (
                   <option key={w.user_id} value={w.user_id}>
                     {w.name} ({w.role})
@@ -207,24 +237,25 @@ const WorkOrderModal = ({ isOpen, onClose, onSubmit, cropCycleId, workers, editi
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">नियत तारीख</label>
+              <label className="font-medium">नियत तारीख</label>
               <input
                 type="date"
+                className="w-full border p-2 rounded-xl"
                 value={formData.due_date}
                 onChange={(e) => handleChange('due_date', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
               />
             </div>
           </div>
 
-          {/* Status & Hold Reason */}
+          {/* STATUS */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">स्थिति</label>
+            <label className="font-medium">स्थिति</label>
             <select
+              className="w-full border p-2 rounded-xl"
               value={formData.status}
               onChange={(e) => handleChange('status', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
             >
+              <option value="current">वर्तमान चरण</option>
               <option value="New">नया</option>
               <option value="In Progress">प्रगति पर</option>
               <option value="On Hold">रोक पर</option>
@@ -236,98 +267,108 @@ const WorkOrderModal = ({ isOpen, onClose, onSubmit, cropCycleId, workers, editi
 
             {formData.status === 'On Hold' && (
               <textarea
+                rows={2}
+                className="w-full mt-2 border rounded-xl p-2"
+                placeholder="रोकने का कारण"
                 value={formData.holdReason}
                 onChange={(e) => handleChange('holdReason', e.target.value)}
-                rows={3}
-                className="w-full mt-2 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                placeholder="Reason for hold"
               />
             )}
           </div>
 
-          {/* Resolution Section */}
-          <div className="bg-gray-50 p-4 rounded-xl space-y-2">
-            <label>अपेक्षित समाधान तिथि</label>
-            <input
-              type="date"
-              value={formData.expectedDate}
-              onChange={(e) => handleChange('expectedDate', e.target.value)}
-              className="w-full border rounded-lg p-2"
-            />
-
-            <label>वास्तविक संकल्प तिथि</label>
-            <input
-              type="date"
-              value={formData.actualResolvedDate}
-              onChange={(e) => handleChange('actualResolvedDate', e.target.value)}
-              className="w-full border rounded-lg p-2"
-            />
-
-            <label>संकल्प टिप्पणियाँ</label>
-            <textarea
-              value={formData.resolutionComments}
-              onChange={(e) => handleChange('resolutionComments', e.target.value)}
-              className="w-full border rounded-lg p-2"
-            />
-
-            <label>अवलोकन</label>
-            <textarea
-              value={formData.observation}
-              onChange={(e) => handleChange('observation', e.target.value)}
-              className="w-full border rounded-lg p-2"
-            />
-          </div>
-
-          {/* Comments */}
-          <div>
-            <label>टिप्पणियाँ (कर्मचारी का नाम / ID)</label>
-            <textarea
-              value={formData.comments}
-              onChange={(e) => handleChange('comments', e.target.value)}
-              className="w-full border rounded-lg p-2"
-            />
-          </div>
-
-          {/* Attachments */}
-          <div>
-            <label>संलग्नक</label>
-            <input type="file" multiple onChange={handleFileChange} className="mt-1" />
-            {formData.attachments.length > 0 && (
-              <ul className="mt-2 list-disc list-inside">
-                {formData.attachments.map((file, i) => (
-                  <li key={i}>{file.name}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Buttons */}
-          <div className="flex justify-end space-x-3 pt-4 border-t">
+          {/* ================= TABS ================= */}
+          <div className="flex gap-8 border-t pt-4">
             <button
               type="button"
-              onClick={onClose}
-              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              onClick={() => setActiveTab('notes')}
+              className={`pb-2 ${
+                activeTab === 'notes'
+                  ? 'border-b-2 border-green-600 text-green-600 font-semibold'
+                  : 'text-gray-500'
+              }`}
             >
-              Cancel
+              Notes
             </button>
+
             <button
-              type="submit"
-              className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition font-semibold"
+              type="button"
+              onClick={() => setActiveTab('resolution')}
+              className={`pb-2 ${
+                activeTab === 'resolution'
+                  ? 'border-b-2 border-green-600 text-green-600 font-semibold'
+                  : 'text-gray-500'
+              }`}
             >
-              {editing ? 'Update Work Order' : 'Create Work Order'}
+              Resolution Information
             </button>
           </div>
-        </form>
-      </div>
 
-      <ChatbotModal
-        isOpen={showChatbot}
-        onClose={() => setShowChatbot(false)}
-        formType="work_order"
-        cropCycleId={cropCycleId}
-        workers={workers}
-        onFormComplete={handleChatbotComplete}
-      />
+          {/* NOTES */}
+          {activeTab === 'notes' && (
+            <textarea
+              rows={3}
+              className="w-full border rounded-xl p-2"
+              placeholder="टिप्पणियाँ"
+              value={formData.comments}
+              onChange={(e) => handleChange('comments', e.target.value)}
+            />
+          )}
+
+          {/* RESOLUTION */}
+          {activeTab === 'resolution' && (
+            <div className="bg-gray-50 p-4 rounded-xl space-y-3">
+              <label className="font-medium">वास्तविक समाधान तिथि</label>
+              <input
+                type="date"
+                className="w-full border p-2 rounded-xl"
+                value={formData.actualResolvedDate}
+                onChange={(e) =>
+                  handleChange('actualResolvedDate', e.target.value)
+                }
+              />
+
+              <textarea
+                className="w-full border rounded-xl p-2"
+                placeholder="समाधान टिप्पणियाँ"
+                value={formData.resolutionComments}
+                onChange={(e) =>
+                  handleChange('resolutionComments', e.target.value)
+                }
+              />
+
+              <textarea
+                className="w-full border rounded-xl p-2"
+                placeholder="निरीक्षण टिप्पणी"
+                value={formData.observation}
+                onChange={(e) => handleChange('observation', e.target.value)}
+              />
+            </div>
+          )}
+
+          {/* ATTACHMENTS */}
+          <input type="file" multiple onChange={handleFileChange} />
+
+          {/* ACTIONS */}
+          <div className="flex justify-end gap-4 pt-4 border-t">
+            <button type="button" onClick={onClose} className="px-6 py-2 border rounded-xl">
+              Cancel
+            </button>
+            <button type="submit" className="px-6 py-2 bg-green-600 text-white rounded-xl">
+              {editing ? 'Update' : 'Create'}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {showChatbot && (
+        <ChatbotModal
+          isOpen
+          onClose={() => setShowChatbot(false)}
+          formType="work_order"
+          cropCycleId={cropCycleId}
+          workers={workers}
+        />
+      )}
     </div>
   );
 };

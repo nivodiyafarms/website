@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
 import { useNavigate } from "react-router-dom";
 
 import BreadcrumbNav from "../components/BreadcrumbNav";
 
 import api from "../services/api";
-
-import { Edit, Trash2, Plus } from "lucide-react";
 
 
 
@@ -40,30 +38,7 @@ export default function GeneralPurpose() {
 
   });
 
-  const [expenses, setExpenses] = useState([]);
 
-  const [loading, setLoading] = useState(false);
-
-  const [showForm, setShowForm] = useState(false);
-
-
-
-  useEffect(() => {
-    loadExpenses();
-  }, []);
-
-  const loadExpenses = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get("/api/general-expenses");
-      setExpenses(response.data || []);
-    } catch (err) {
-      console.error("Failed to load expenses:", err);
-      alert("Failed to load expenses");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleChange = (e) => {
 
@@ -81,15 +56,15 @@ export default function GeneralPurpose() {
 
     try {
 
-      await api.post("/api/general-expenses", {
+      await api.post("/general-expenses", {
 
         ...form,
 
-        quantity: form.quantity ? Number(form.quantity) : null,
+        quantity: Number(form.quantity),
 
-        rate: form.rate ? Number(form.rate) : null,
+        rate: Number(form.rate),
 
-        total_amount: form.total_amount ? Number(form.total_amount) : null,
+        total_amount: Number(form.total_amount),
 
       });
 
@@ -121,67 +96,11 @@ export default function GeneralPurpose() {
 
       });
 
-      setShowForm(false);
-
-      loadExpenses();
-
     } catch (err) {
 
-      console.error("Failed to save expense:", err);
-
-      alert("Failed to save expense: " + (err.response?.data?.detail || err.message));
+      alert("Failed to save expense");
 
     }
-
-  };
-
-  const handleDelete = async (expenseId) => {
-
-    if (!window.confirm("Are you sure you want to delete this expense?")) {
-
-      return;
-
-    }
-
-    try {
-
-      await api.delete(`/api/general-expenses/${expenseId}`);
-
-      alert("Expense deleted successfully");
-
-      loadExpenses();
-
-    } catch (err) {
-
-      console.error("Failed to delete expense:", err);
-
-      alert("Failed to delete expense");
-
-    }
-
-  };
-
-  const formatDate = (dateString) => {
-
-    if (!dateString) return "-";
-
-    try {
-
-      return new Date(dateString).toLocaleDateString();
-
-    } catch {
-
-      return dateString;
-
-    }
-
-  };
-
-  const formatCurrency = (amount) => {
-
-    if (!amount) return "₹0";
-
-    return `₹${Number(amount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   };
 
@@ -229,29 +148,13 @@ export default function GeneralPurpose() {
 
         </div>
 
-        <button
-
-          onClick={() => setShowForm(!showForm)}
-
-          className="flex items-center space-x-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg font-medium transition"
-
-        >
-
-          <Plus className="w-5 h-5" />
-
-          <span>{showForm ? "Hide Form" : "Add New Expense"}</span>
-
-        </button>
-
       </div>
 
 
 
       {/* FORM CARD */}
 
-      {showForm && (
-
-        <div className="bg-white rounded-xl shadow p-6 mb-6">
+      <div className="bg-white rounded-xl shadow p-6">
 
         <form
 
@@ -326,162 +229,6 @@ export default function GeneralPurpose() {
           </div>
 
         </form>
-
-      </div>
-
-      )}
-
-
-
-      {/* EXPENSES TABLE */}
-
-      <div className="bg-white rounded-xl shadow overflow-hidden">
-
-        <div className="p-6 border-b border-gray-200">
-
-          <h2 className="text-xl font-semibold text-gray-900">All Expenses</h2>
-
-          <p className="text-sm text-gray-600 mt-1">Total: {expenses.length} expense(s)</p>
-
-        </div>
-
-
-
-        {loading ? (
-
-          <div className="p-12 text-center">
-
-            <p className="text-gray-500">Loading expenses...</p>
-
-          </div>
-
-        ) : expenses.length === 0 ? (
-
-          <div className="p-12 text-center">
-
-            <p className="text-gray-500">No expenses recorded yet. Add your first expense above.</p>
-
-          </div>
-
-        ) : (
-
-          <div className="overflow-x-auto">
-
-            <table className="w-full">
-
-              <thead className="bg-gray-50">
-
-                <tr>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subcategory</th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Cost</th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-
-                </tr>
-
-              </thead>
-
-              <tbody className="bg-white divide-y divide-gray-200">
-
-                {expenses.map((expense) => (
-
-                  <tr key={expense.id} className="hover:bg-gray-50">
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-
-                      {formatDate(expense.date)}
-
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-
-                      {expense.category || "-"}
-
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-
-                      {expense.subcategory || "-"}
-
-                    </td>
-
-                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-
-                      {expense.description || "-"}
-
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-
-                      {expense.qty || "-"}
-
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-
-                      {expense.unit || "-"}
-
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-
-                      {expense.unit_rate ? formatCurrency(expense.unit_rate) : "-"}
-
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-
-                      {formatCurrency(expense.total_cost)}
-
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-
-                      <div className="flex items-center space-x-2">
-
-                        <button
-
-                          onClick={() => handleDelete(expense.id)}
-
-                          className="text-red-600 hover:text-red-900 transition"
-
-                          title="Delete"
-
-                        >
-
-                          <Trash2 className="w-4 h-4" />
-
-                        </button>
-
-                      </div>
-
-                    </td>
-
-                  </tr>
-
-                ))}
-
-              </tbody>
-
-            </table>
-
-          </div>
-
-        )}
 
       </div>
 

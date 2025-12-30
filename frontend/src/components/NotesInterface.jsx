@@ -12,39 +12,19 @@ const NotesInterface = ({ cropCycleId }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const notesEndRef = useRef(null);
   const fileInputRef = useRef(null);
-  const notesContainerRef = useRef(null);
-  const [previousNotesCount, setPreviousNotesCount] = useState(0);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
     setCurrentUser(user);
-    setIsInitialLoad(true);
     loadNotes();
   }, [cropCycleId]);
 
   useEffect(() => {
-    // Only scroll if:
-    // 1. Not initial load (notes were already loaded)
-    // 2. A new note was added (notes count increased)
-    if (!isInitialLoad && notes.length > previousNotesCount) {
-      // Use setTimeout to ensure DOM is updated
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
-    }
-    setPreviousNotesCount(notes.length);
-    setIsInitialLoad(false);
+    scrollToBottom();
   }, [notes]);
 
   const scrollToBottom = () => {
-    // Scroll within the notes container, not the entire page
-    if (notesContainerRef.current) {
-      notesContainerRef.current.scrollTo({
-        top: notesContainerRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
+    notesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const loadNotes = async () => {
@@ -193,7 +173,7 @@ const NotesInterface = ({ cropCycleId }) => {
       </div>
 
       {/* Notes List */}
-      <div ref={notesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {notes.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">No notes yet. Start the conversation!</p>

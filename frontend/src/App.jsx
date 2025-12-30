@@ -13,7 +13,9 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+
           <Route path="/login" element={<Login />} />
+
           <Route
             path="/dashboard"
             element={
@@ -24,6 +26,7 @@ function App() {
               </PrivateRoute>
             }
           />
+
           <Route
             path="/crop-cycle-management"
             element={
@@ -34,6 +37,8 @@ function App() {
               </PrivateRoute>
             }
           />
+
+          {/* General Purpose AFTER Crop Cycle */}
           <Route
             path="/general-purpose"
             element={
@@ -44,7 +49,9 @@ function App() {
               </PrivateRoute>
             }
           />
+
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
         </Routes>
       </AuthProvider>
     </BrowserRouter>
@@ -52,4 +59,3 @@ function App() {
 }
 
 export default App;
-

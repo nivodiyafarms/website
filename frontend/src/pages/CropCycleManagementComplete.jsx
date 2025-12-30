@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, ArrowLeft, Edit, Trash2, FileText, Mic, ClipboardList, Package, AlertCircle, X } from 'lucide-react';
+import { Plus, ArrowLeft, Edit, Trash2, FileText, Mic, ClipboardList, Package, AlertCircle } from 'lucide-react';
 import WorkflowBar from '../components/WorkflowBar';
 import BreadcrumbNav from '../components/BreadcrumbNav';
 import CropCycleModal from '../components/CropCycleModal';
 import TaskModal from '../components/TaskModal';
 import WorkOrderModal from '../components/WorkOrderModal';
+import WorkOrderResource from '../components/WorkOrderResoucre';
 import NotesInterface from '../components/NotesInterface';
 import { cropCycleIncidentAPI, fieldAPI, userAPI } from '../services/api';
 
@@ -35,6 +36,9 @@ const CropCycleManagementComplete = () => {
   const [editingCycle, setEditingCycle] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [editingWorkOrder, setEditingWorkOrder] = useState(null);
+  const [selectedWorkOrder, setSelectedWorkOrder] = useState(null);
+  const [showWorkOrderResource, setShowWorkOrderResource] = useState(false);
+
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
@@ -87,7 +91,6 @@ const CropCycleManagementComplete = () => {
       
       setSelectedCycle(cycleRes.data);
       setTasks(tasksRes.data);
-      console.log('📋 Loaded work orders:', ordersRes.data);
       setWorkOrders(ordersRes.data);
       setViewMode('cycle-detail');
       setBreadcrumb([
@@ -155,8 +158,6 @@ const CropCycleManagementComplete = () => {
 
   const handleSubmitCycle = async (data) => {
     try {
-      console.log('📤 Submitting crop cycle data:', data);
-      
       if (editingCycle) {
         await cropCycleIncidentAPI.updateCycle(editingCycle.incident_id, data);
       } else {
@@ -171,28 +172,8 @@ const CropCycleManagementComplete = () => {
         loadCycleDetail(selectedCycle.incident_id);
       }
     } catch (error) {
-      console.error('❌ Failed to save crop cycle:', error);
-      console.error('❌ Error response:', error.response);
-      console.error('❌ Error status:', error.response?.status);
-      console.error('❌ Error data:', error.response?.data);
-      
-      // Show detailed error message
-      const errorDetails = error.response?.data?.detail || 'Failed to save crop cycle';
-      if (Array.isArray(errorDetails)) {
-        // Pydantic validation errors
-        const errorMessages = errorDetails.map(err => 
-          `${err.loc?.join('.') || 'unknown'}: ${err.msg || err}`
-        ).join('\n');
-        console.error('📋 Validation Errors:', errorMessages);
-        alert(`Validation Errors:\n${errorMessages}`);
-      } else if (typeof errorDetails === 'object') {
-        // Object error details
-        console.error('📋 Error Details Object:', JSON.stringify(errorDetails, null, 2));
-        alert(`Error: ${JSON.stringify(errorDetails, null, 2)}`);
-      } else {
-        console.error('📋 Error Details:', errorDetails);
-        alert(errorDetails);
-      }
+      console.error('Failed to save crop cycle:', error);
+      alert(error.response?.data?.detail || 'Failed to save crop cycle');
     }
   };
 
@@ -203,87 +184,42 @@ const CropCycleManagementComplete = () => {
 
   const handleSubmitTask = async (data) => {
     try {
-      console.log('📤 Submitting task data:', data);
-      
-      if (editingTask) {
-        // Update existing task
-        await cropCycleIncidentAPI.updateTask(selectedCycle.incident_id, editingTask.task_id, data);
-      } else {
-        // Create new task
-        await cropCycleIncidentAPI.createTask(selectedCycle.incident_id, data);
-      }
-      
+      await cropCycleIncidentAPI.createTask(selectedCycle.incident_id, data);
       setShowTaskModal(false);
-      setEditingTask(null);
-      
-      // Reload data
-      if (viewMode === 'task-detail' && selectedTask) {
-        // If viewing task detail, reload task detail
-        const updatedTask = await cropCycleIncidentAPI.getTaskById(selectedCycle.incident_id, selectedTask.task_id);
-        setSelectedTask(updatedTask.data);
-      }
-      
       loadCycleDetail(selectedCycle.incident_id);
     } catch (error) {
-      console.error('❌ Failed to save task:', error);
-      console.error('❌ Error response:', error.response?.data);
-      console.error('❌ Error status:', error.response?.status);
-      
-      // Parse Pydantic validation errors
-      if (error.response?.data?.detail) {
-        const detail = error.response.data.detail;
-        if (Array.isArray(detail)) {
-          // Pydantic validation errors
-          const errorMessages = detail.map(err => {
-            const field = err.loc?.join('.') || 'unknown';
-            const msg = err.msg || 'validation error';
-            return `${field}: ${msg}`;
-          }).join('\n');
-          alert(`Validation errors:\n${errorMessages}`);
-        } else if (typeof detail === 'string') {
-          alert(`Error: ${detail}`);
-        } else {
-          alert(`Error: ${JSON.stringify(detail, null, 2)}`);
-        }
-      } else {
-        alert('Failed to save task. Check console for details.');
-      }
+      console.error('Failed to create task:', error);
+      alert(error.response?.data?.detail || 'Failed to create task');
     }
-  };
-  
-  const handleEditTask = (task) => {
-    setEditingTask(task);
-    setShowTaskModal(true);
   };
 
   const handleCreateWorkOrder = () => {
     setEditingWorkOrder(null);
     setShowWorkOrderModal(true);
   };
-  
-  // Pass task_id when creating work order from task detail view
-  const handleSubmitWorkOrderWithTask = async (data) => {
-    if (selectedTask && selectedTask.task_id) {
-      data.task_id = selectedTask.task_id;
-    }
-    return handleSubmitWorkOrder(data);
-  };
 
   const handleSubmitWorkOrder = async (data) => {
-    try {
-      console.log('📤 Creating work order with data:', data);
-      const response = await cropCycleIncidentAPI.createWorkOrder(selectedCycle.incident_id, data);
-      console.log('✅ Work order created, response:', response.data);
-      setShowWorkOrderModal(false);
-      // Reload cycle detail to refresh work orders
-      await loadCycleDetail(selectedCycle.incident_id);
-      console.log('🔄 Cycle detail reloaded, work orders:', workOrders);
-    } catch (error) {
-      console.error('❌ Failed to create work order:', error);
-      console.error('❌ Error response:', error.response?.data);
-      alert(error.response?.data?.detail || 'Failed to create work order');
-    }
-  };
+  try {
+    const response = await cropCycleIncidentAPI.createWorkOrder(
+      selectedCycle.incident_id,
+      data
+    );
+
+    // ✅ Close WorkOrder modal
+    setShowWorkOrderModal(false);
+
+    // ✅ Open WorkOrderResource screen
+    setSelectedWorkOrder(response.data);
+    setShowWorkOrderResource(true);
+
+    // Refresh cycle data
+    loadCycleDetail(selectedCycle.incident_id);
+  } catch (error) {
+    console.error("Failed to create work order:", error);
+    alert(error.response?.data?.detail || "Failed to create work order");
+  }
+};
+
 
   const handleDeleteCycle = async (id) => {
     if (window.confirm('Are you sure? This will delete the crop cycle and all its tasks!')) {
@@ -668,7 +604,7 @@ const CropCycleManagementComplete = () => {
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">{selectedTask.short_description}</h2>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
               {selectedTask.severity && (
                 <span className={`px-3 py-1 rounded text-sm font-bold ${getSeverityColor(selectedTask.severity)}`}>
                   {selectedTask.severity}
@@ -677,29 +613,6 @@ const CropCycleManagementComplete = () => {
               <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(selectedTask.status)}`}>
                 {selectedTask.status}
               </span>
-              {/* Edit and Close buttons */}
-              {selectedTask.status !== 'closed' && selectedTask.status !== 'बंद' && (
-                <>
-                  <button
-                    onClick={() => handleEditTask(selectedTask)}
-                    className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
-                  >
-                    <Edit className="w-4 h-4" />
-                    <span>Edit Task</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Are you sure you want to close this task? You will need to provide a reason.')) {
-                        handleEditTask({ ...selectedTask, status: 'बंद' });
-                      }
-                    }}
-                    className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition"
-                  >
-                    <X className="w-4 h-4" />
-                    <span>Close Task</span>
-                  </button>
-                </>
-              )}
             </div>
           </div>
 
@@ -807,43 +720,16 @@ const CropCycleManagementComplete = () => {
             {(() => {
               // Filter work orders that are linked to this task
               const taskWorkOrders = workOrders.filter(order => {
-                console.log('🔍 Checking work order:', {
-                  work_order_id: order.work_order_id,
-                  linked_task_ids: order.linked_task_ids,
-                  selectedTask_task_id: selectedTask.task_id,
-                  order_title: order.title
-                });
-                
-                if (!order.linked_task_ids) {
-                  console.log('  ❌ No linked_task_ids');
-                  return false;
-                }
-                
+                if (!order.linked_task_ids) return false;
                 try {
                   const linkedTasks = typeof order.linked_task_ids === 'string' 
                     ? JSON.parse(order.linked_task_ids) 
                     : order.linked_task_ids;
-                  
-                  console.log('  📝 Parsed linked tasks:', linkedTasks);
-                  console.log('  🔑 Selected task ID:', selectedTask.task_id);
-                  console.log('  ✅ Includes?', Array.isArray(linkedTasks) && linkedTasks.includes(selectedTask.task_id));
-                  
-                  // Also check if task_id matches as string
-                  const taskIdStr = String(selectedTask.task_id);
-                  const matches = Array.isArray(linkedTasks) && (
-                    linkedTasks.includes(selectedTask.task_id) || 
-                    linkedTasks.includes(taskIdStr) ||
-                    linkedTasks.some(id => String(id) === taskIdStr || String(id) === String(selectedTask.task_id))
-                  );
-                  
-                  return matches;
-                } catch (error) {
-                  console.error('  ❌ Error parsing linked_task_ids:', error);
+                  return Array.isArray(linkedTasks) && linkedTasks.includes(selectedTask.task_id);
+                } catch {
                   return false;
                 }
               });
-              
-              console.log('📊 Filtered work orders for task:', taskWorkOrders.length, taskWorkOrders);
 
               return taskWorkOrders.length === 0 ? (
                 <div className="text-center py-8 bg-gray-50 rounded-lg">
@@ -937,7 +823,7 @@ const CropCycleManagementComplete = () => {
         <WorkOrderModal
           isOpen={showWorkOrderModal}
           onClose={() => { setShowWorkOrderModal(false); setEditingWorkOrder(null); }}
-          onSubmit={handleSubmitWorkOrderWithTask}
+          onSubmit={handleSubmitWorkOrder}
           cropCycleId={selectedCycle.incident_id}
           workers={users}
           editing={editingWorkOrder}

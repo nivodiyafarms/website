@@ -1,17 +1,4 @@
 import axios from 'axios';
-import {
-  transformCropCycleRequest,
-  transformTaskRequest,
-  transformWorkOrderRequest,
-  transformCropCycleResponse,
-  transformTaskResponse,
-  transformWorkOrderResponse,
-  transformResponseArray,
-  isCropCycleIncidentUrl,
-  isTaskUrl,
-  isWorkOrderUrl,
-  isCreateOrUpdate,
-} from '../utils/apiTransformers';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -22,63 +9,13 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add JWT token and transform requests
+// Request interceptor to add JWT token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-
-    // Transform request data for crop-cycle-incidents endpoints
-    if (config.data && isCropCycleIncidentUrl(config.url)) {
-      // Skip transformation for FormData (voice upload)
-      if (config.data instanceof FormData) {
-        return config;
-      }
-
-      const method = config.method?.toLowerCase();
-      if (isCreateOrUpdate(method)) {
-        try {
-          if (isTaskUrl(config.url)) {
-            // Transform task request
-            console.log('🔵 BEFORE TASK TRANSFORMATION:', JSON.stringify(config.data, null, 2));
-            config.data = transformTaskRequest(config.data);
-            console.log('🟢 AFTER TASK TRANSFORMATION:', JSON.stringify(config.data, null, 2));
-          } else if (isWorkOrderUrl(config.url)) {
-            // Transform work order request
-            config.data = transformWorkOrderRequest(config.data);
-          } else {
-            // Log BEFORE transformation
-            console.log('🔵 BEFORE TRANSFORMATION:', JSON.stringify(config.data, null, 2));
-            const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-            console.log('🔵 Current User:', currentUser);
-            console.log('🔵 User ID (id):', currentUser?.id);
-            console.log('🔵 User ID (user_id):', currentUser?.user_id);
-            const userId = currentUser?.id || currentUser?.user_id;
-            console.log('🔵 Using User ID:', userId);
-            console.log('🔵 Is UUID?', /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId || ''));
-            
-            // Transform crop cycle request
-            config.data = transformCropCycleRequest(config.data);
-            
-            // Log AFTER transformation
-            console.log('🟢 AFTER TRANSFORMATION:', JSON.stringify(config.data, null, 2));
-            
-            // Validate required fields
-            const requiredFields = ['field_id', 'crop_name', 'sowing_date', 'supervisor_id'];
-            const missingFields = requiredFields.filter(field => !config.data[field]);
-            if (missingFields.length > 0) {
-              console.warn('⚠️ Missing required fields:', missingFields);
-            }
-          }
-        } catch (error) {
-          console.error('❌ Error transforming request data:', error);
-          // Continue with original data if transformation fails
-        }
-      }
-    }
-
     return config;
   },
   (error) => {
@@ -86,42 +23,9 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle errors and transform responses
+// Response interceptor to handle errors
 api.interceptors.response.use(
-  (response) => {
-    // Transform response data for crop-cycle-incidents endpoints
-    if (response.data && isCropCycleIncidentUrl(response.config.url)) {
-      try {
-        if (isTaskUrl(response.config.url)) {
-          // Transform task response
-          if (Array.isArray(response.data)) {
-            response.data = response.data.map(transformTaskResponse);
-          } else {
-            response.data = transformTaskResponse(response.data);
-          }
-        } else if (isWorkOrderUrl(response.config.url)) {
-          // Transform work order response
-          if (Array.isArray(response.data)) {
-            response.data = response.data.map(transformWorkOrderResponse);
-          } else {
-            response.data = transformWorkOrderResponse(response.data);
-          }
-        } else {
-          // Transform crop cycle response
-          if (Array.isArray(response.data)) {
-            response.data = response.data.map(transformCropCycleResponse);
-          } else {
-            response.data = transformCropCycleResponse(response.data);
-          }
-        }
-      } catch (error) {
-        console.error('Error transforming response data:', error);
-        // Continue with original data if transformation fails
-      }
-    }
-
-    return response;
-  },
+  (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
