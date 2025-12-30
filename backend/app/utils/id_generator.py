@@ -110,3 +110,6 @@ def _generate_sequential_id(db: Session, table_name: str, column_name: str, pref
             return f"{prefix}0001"
 
 
+
+
+

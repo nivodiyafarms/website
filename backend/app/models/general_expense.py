@@ -37,3 +37,6 @@ class GeneralExpense(Base):
     # Timestamps
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
 
+
+
+
