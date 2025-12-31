@@ -264,13 +264,19 @@ const handleBeejCategoryChange = (e) => {
         {/* BODY */}
         <div className="p-6 space-y-6 max-h-[85vh] overflow-y-auto">
 
-          <Input
-            label="Incident ID"
-            value={formData.incidentId}
-            onChange={(e) =>
-              setFormData((p) => ({ ...p, incidentId: e.target.value }))
-            }
-          />
+          {/* ID Display (read-only when editing) or info message */}
+          {formData.incidentId ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <label className="text-sm font-medium text-blue-900">Incident ID (Auto-generated)</label>
+              <p className="text-lg font-semibold text-blue-700">{formData.incidentId}</p>
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold">Note:</span> ID will be auto-generated (e.g., IN0001)
+              </p>
+            </div>
+          )}
 
           <div className="grid md:grid-cols-2 gap-6">
 

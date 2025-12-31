@@ -164,15 +164,19 @@ const WorkOrderModal = ({
         {/* ================= BODY ================= */}
         <div className="p-6 space-y-6">
 
-          {/* WORK ORDER ID */}
-          <div>
-            <label className="font-medium">Work Order ID</label>
-            <input
-              className="w-full border p-2 rounded-xl bg-gray-100"
-              value={formData.workOrderId}
-              onChange={(e) => handleChange('workOrderId', e.target.value)}
-            />
-          </div>
+          {/* WORK ORDER ID - Display only if exists, otherwise show info */}
+          {formData.workOrderId ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <label className="text-sm font-medium text-blue-900 block mb-1">Work Order ID (Auto-generated)</label>
+              <p className="text-lg font-semibold text-blue-700">{formData.workOrderId}</p>
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold">Note:</span> ID will be auto-generated (e.g., WO0001)
+              </p>
+            </div>
+          )}
 
           {/* SHORT DESCRIPTION */}
           <div>

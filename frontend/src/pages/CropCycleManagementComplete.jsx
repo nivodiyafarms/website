@@ -23,11 +23,32 @@ const CropCycleManagementComplete = () => {
   const [workOrders, setWorkOrders] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingStates, setLoadingStates] = useState({
+    cycles: false,
+    cycleDetail: false,
+    tasks: false,
+    workOrders: false,
+  });
   const [breadcrumb, setBreadcrumb] = useState([{ name: 'Crop Cycles', id: null }]);
   
   const [fields, setFields] = useState([]);
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+
+  // Cache for cycle details
+  const [cache, setCache] = useState({
+    cycles: null,
+    cycleDetails: {}, // { cycleId: { cycle, tasks, workOrders, timestamp } }
+  });
+  const CACHE_TTL = 30000; // 30 seconds
+  
+  // Toast notification state
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+  };
 
   // Modal states
   const [showCycleModal, setShowCycleModal] = useState(false);
@@ -66,51 +87,221 @@ const CropCycleManagementComplete = () => {
   };
 
   const loadCropCycles = async () => {
+    // Check cache first
+    if (cache.cycles && (Date.now() - cache.cycles.timestamp) < CACHE_TTL) {
+      setCropCycles(cache.cycles.data);
+      setViewMode('list');
+      setBreadcrumb([{ name: 'Crop Cycles', id: null }]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+    setLoadingStates(prev => ({ ...prev, cycles: true }));
     try {
       const response = await cropCycleIncidentAPI.getAllCycles();
       setCropCycles(response.data);
       setViewMode('list');
       setBreadcrumb([{ name: 'Crop Cycles', id: null }]);
+      // Update cache
+      setCache(prev => ({
+        ...prev,
+        cycles: { data: response.data, timestamp: Date.now() }
+      }));
     } catch (error) {
       console.error('Failed to load crop cycles:', error);
-      alert('Failed to load crop cycles');
+      // Don't show alert, just log - allow cached data to show if available
     } finally {
       setLoading(false);
+      setLoadingStates(prev => ({ ...prev, cycles: false }));
     }
   };
 
-  const loadCycleDetail = async (id) => {
+  // Check cache before loading
+  const loadCycleDetail = async (id, forceRefresh = false) => {
+    // Check cache first
+    if (!forceRefresh && cache.cycleDetails[id]) {
+      const cached = cache.cycleDetails[id];
+      if ((Date.now() - cached.timestamp) < CACHE_TTL) {
+        setSelectedCycle(cached.cycle);
+        setTasks(cached.tasks);
+        setWorkOrders(cached.workOrders);
+        setViewMode('cycle-detail');
+        setBreadcrumb([
+          { name: 'Crop Cycles', id: null },
+          { name: `${cached.cycle.crop_name} - ${cached.cycle.field_id}`, id: id }
+        ]);
+        setLoading(false);
+        
+        if (taskId) {
+          const task = cached.tasks.find(t => t.task_id === taskId);
+          if (task) {
+            setSelectedTask(task);
+            setViewMode('task-detail');
+            setBreadcrumb(prev => [...prev, { name: task.short_description, id: taskId }]);
+          }
+        }
+        return;
+      }
+    }
+
     setLoading(true);
+    setLoadingStates(prev => ({ ...prev, cycleDetail: true, tasks: true, workOrders: true }));
+    
     try {
-      const [cycleRes, tasksRes, ordersRes] = await Promise.all([
+      // Use Promise.allSettled to handle partial failures gracefully
+      const results = await Promise.allSettled([
         cropCycleIncidentAPI.getCycleById(id),
         cropCycleIncidentAPI.getTasks(id),
         cropCycleIncidentAPI.getWorkOrders(id),
       ]);
       
-      setSelectedCycle(cycleRes.data);
-      setTasks(tasksRes.data);
-      setWorkOrders(ordersRes.data);
-      setViewMode('cycle-detail');
-      setBreadcrumb([
-        { name: 'Crop Cycles', id: null },
-        { name: `${cycleRes.data.crop_name} - ${cycleRes.data.field_id}`, id: id }
-      ]);
-      
-      if (taskId) {
-        const task = tasksRes.data.find(t => t.task_id === taskId);
-        if (task) {
-          setSelectedTask(task);
-          setViewMode('task-detail');
-          setBreadcrumb(prev => [...prev, { name: task.short_description, id: taskId }]);
+      // Handle cycle result
+      if (results[0].status === 'fulfilled') {
+        setSelectedCycle(results[0].value.data);
+      } else {
+        console.error('Failed to load cycle:', results[0].reason);
+        // Don't show alert if we have cached data
+        if (!cache.cycleDetails[id]) {
+          showToast('Failed to load cycle details', 'error');
         }
+      }
+      
+      // Handle tasks result
+      if (results[1].status === 'fulfilled') {
+        setTasks(results[1].value.data);
+      } else {
+        console.error('Failed to load tasks:', results[1].reason);
+        // Use cached tasks if available
+        if (cache.cycleDetails[id]?.tasks) {
+          setTasks(cache.cycleDetails[id].tasks);
+        }
+      }
+      
+      // Handle work orders result
+      if (results[2].status === 'fulfilled') {
+        setWorkOrders(results[2].value.data);
+      } else {
+        console.error('Failed to load work orders:', results[2].reason);
+        // Use cached work orders if available
+        if (cache.cycleDetails[id]?.workOrders) {
+          setWorkOrders(cache.cycleDetails[id].workOrders);
+        }
+      }
+      
+      // Only set view mode if we got the cycle data
+      if (results[0].status === 'fulfilled') {
+        setViewMode('cycle-detail');
+        setBreadcrumb([
+          { name: 'Crop Cycles', id: null },
+          { name: `${results[0].value.data.crop_name} - ${results[0].value.data.field_id}`, id: id }
+        ]);
+        
+        if (taskId && results[1].status === 'fulfilled') {
+          const task = results[1].value.data.find(t => t.task_id === taskId);
+          if (task) {
+            setSelectedTask(task);
+            setViewMode('task-detail');
+            setBreadcrumb(prev => [...prev, { name: task.short_description, id: taskId }]);
+          }
+        }
+        
+        // Update cache
+        setCache(prev => ({
+          ...prev,
+          cycleDetails: {
+            ...prev.cycleDetails,
+            [id]: {
+              cycle: results[0].value.data,
+              tasks: results[1].status === 'fulfilled' ? results[1].value.data : prev.cycleDetails[id]?.tasks || [],
+              workOrders: results[2].status === 'fulfilled' ? results[2].value.data : prev.cycleDetails[id]?.workOrders || [],
+              timestamp: Date.now()
+            }
+          }
+        }));
       }
     } catch (error) {
       console.error('Failed to load cycle details:', error);
-      alert('Failed to load cycle details');
+      // Only show toast if no cached data available
+      if (!cache.cycleDetails[id]) {
+        showToast('Failed to load cycle details', 'error');
+      }
     } finally {
       setLoading(false);
+      setLoadingStates(prev => ({ ...prev, cycleDetail: false, tasks: false, workOrders: false }));
+    }
+  };
+
+  // Selective refresh functions
+  const refreshTasks = async (cycleId) => {
+    setLoadingStates(prev => ({ ...prev, tasks: true }));
+    try {
+      const response = await cropCycleIncidentAPI.getTasks(cycleId);
+      setTasks(response.data);
+      // Update cache
+      setCache(prev => ({
+        ...prev,
+        cycleDetails: {
+          ...prev.cycleDetails,
+          [cycleId]: {
+            ...prev.cycleDetails[cycleId],
+            tasks: response.data,
+            timestamp: Date.now()
+          }
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to refresh tasks:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, tasks: false }));
+    }
+  };
+
+  const refreshWorkOrders = async (cycleId) => {
+    setLoadingStates(prev => ({ ...prev, workOrders: true }));
+    try {
+      const response = await cropCycleIncidentAPI.getWorkOrders(cycleId);
+      setWorkOrders(response.data);
+      // Update cache
+      setCache(prev => ({
+        ...prev,
+        cycleDetails: {
+          ...prev.cycleDetails,
+          [cycleId]: {
+            ...prev.cycleDetails[cycleId],
+            workOrders: response.data,
+            timestamp: Date.now()
+          }
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to refresh work orders:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, workOrders: false }));
+    }
+  };
+
+  const refreshCycle = async (cycleId) => {
+    setLoadingStates(prev => ({ ...prev, cycleDetail: true }));
+    try {
+      const response = await cropCycleIncidentAPI.getCycleById(cycleId);
+      setSelectedCycle(response.data);
+      // Update cache
+      setCache(prev => ({
+        ...prev,
+        cycleDetails: {
+          ...prev.cycleDetails,
+          [cycleId]: {
+            ...prev.cycleDetails[cycleId],
+            cycle: response.data,
+            timestamp: Date.now()
+          }
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to refresh cycle:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, cycleDetail: false }));
     }
   };
 
@@ -157,23 +348,84 @@ const CropCycleManagementComplete = () => {
   };
 
   const handleSubmitCycle = async (data) => {
-    try {
-      if (editingCycle) {
-        await cropCycleIncidentAPI.updateCycle(editingCycle.incident_id, data);
-      } else {
-        await cropCycleIncidentAPI.createCycle(data);
-      }
-      setShowCycleModal(false);
-      setEditingCycle(null);
+    const isUpdate = !!editingCycle;
+    const cycleId = editingCycle?.incident_id;
+    
+    // Optimistic update
+    if (isUpdate) {
+      // Update local state immediately
+      const optimisticCycle = {
+        ...selectedCycle,
+        ...data,
+        incident_id: selectedCycle.incident_id,
+        incident_no: selectedCycle.incident_no,
+      };
+      setSelectedCycle(optimisticCycle);
       
-      if (viewMode === 'list') {
-        loadCropCycles();
+      // Update in cache
+      setCache(prev => ({
+        ...prev,
+        cycleDetails: {
+          ...prev.cycleDetails,
+          [cycleId]: {
+            ...prev.cycleDetails[cycleId],
+            cycle: optimisticCycle,
+            timestamp: Date.now()
+          }
+        }
+      }));
+    } else {
+      // For new cycles, add optimistically to list
+      const tempId = `temp-${Date.now()}`;
+      const optimisticCycle = {
+        incident_id: tempId,
+        incident_no: 'IN0000',
+        field_id: data.field_id,
+        crop_name: data.crop_name,
+        crop_variety: data.crop_variety,
+        sowing_date: data.sowing_date,
+        expected_harvest_date: data.expected_harvest_date,
+        current_stage: data.current_stage || 'SOWING',
+        status: data.status || 'OPEN',
+        ...data,
+      };
+      setCropCycles(prev => [...prev, optimisticCycle]);
+    }
+    
+    setShowCycleModal(false);
+    setEditingCycle(null);
+    
+    // Sync with server in background
+    try {
+      if (isUpdate) {
+        await cropCycleIncidentAPI.updateCycle(cycleId, data);
+        // Refresh to get server data
+        refreshCycle(cycleId);
+        showToast('Crop cycle updated successfully!', 'success');
       } else {
-        loadCycleDetail(selectedCycle.incident_id);
+        const response = await cropCycleIncidentAPI.createCycle(data);
+        // Replace optimistic cycle with real data
+        setCropCycles(prev => {
+          const filtered = prev.filter(c => !c.incident_id.startsWith('temp-'));
+          return [...filtered, response.data];
+        });
+        // Navigate to detail view
+        navigate(`/crop-cycle-management?cycle=${response.data.incident_id}`);
+        // Load detail (will use cache if available)
+        loadCycleDetail(response.data.incident_id, true);
+        showToast(`Crop cycle created successfully! ID: ${response.data.incident_no || 'N/A'}`, 'success');
       }
     } catch (error) {
       console.error('Failed to save crop cycle:', error);
-      alert(error.response?.data?.detail || 'Failed to save crop cycle');
+      
+      // Revert optimistic update
+      if (isUpdate) {
+        refreshCycle(cycleId);
+      } else {
+        setCropCycles(prev => prev.filter(c => !c.incident_id.startsWith('temp-')));
+      }
+      
+      showToast(error.response?.data?.detail || 'Failed to save crop cycle', 'error');
     }
   };
 
@@ -183,20 +435,100 @@ const CropCycleManagementComplete = () => {
   };
 
   const handleSubmitTask = async (data) => {
-    try {
-      if (editingTask) {
-        // Update existing task
-        await cropCycleIncidentAPI.updateTask(selectedCycle.incident_id, editingTask.task_id, data);
-      } else {
-        // Create new task
-        await cropCycleIncidentAPI.createTask(selectedCycle.incident_id, data);
+    const isUpdate = !!editingTask;
+    const taskId = editingTask?.task_id;
+    
+    // Optimistic update: Update UI immediately
+    if (isUpdate) {
+      // Find task in local state
+      const taskIndex = tasks.findIndex(t => t.task_id === taskId);
+      if (taskIndex !== -1) {
+        const oldTask = tasks[taskIndex];
+        // Create optimistic updated task
+        const optimisticTask = {
+          ...oldTask,
+          ...data,
+          // Keep existing IDs and timestamps
+          task_id: oldTask.task_id,
+          task_no: oldTask.task_no,
+        };
+        
+        // Update local state immediately
+        setTasks(prev => {
+          const updated = [...prev];
+          updated[taskIndex] = optimisticTask;
+          return updated;
+        });
+        
+        // Update selected task if it's the one being edited
+        if (selectedTask?.task_id === taskId) {
+          setSelectedTask(optimisticTask);
+        }
       }
-      setShowTaskModal(false);
-      setEditingTask(null);
-      loadCycleDetail(selectedCycle.incident_id);
+    } else {
+      // Create new task optimistically
+      const tempId = `temp-${Date.now()}`;
+      const optimisticTask = {
+        task_id: tempId,
+        task_no: 'TA0000', // Temporary, will be replaced
+        crop_cycle_id: selectedCycle.incident_id,
+        short_description: data.short_description || 'New Task',
+        description: data.description || '',
+        task_type: data.task_type || 'other',
+        status: data.status || 'new',
+        total_cost: 0,
+        ...data,
+      };
+      
+      // Add to local state immediately
+      setTasks(prev => [...prev, optimisticTask]);
+    }
+    
+    // Close modal immediately
+    setShowTaskModal(false);
+    setEditingTask(null);
+    
+    // Sync with server in background
+    try {
+      if (isUpdate) {
+        await cropCycleIncidentAPI.updateTask(selectedCycle.incident_id, taskId, data);
+        // Refresh tasks to get server data (with proper IDs, timestamps, etc.)
+        refreshTasks(selectedCycle.incident_id);
+        showToast('Task updated successfully!', 'success');
+      } else {
+        const response = await cropCycleIncidentAPI.createTask(selectedCycle.incident_id, data);
+        // Replace optimistic task with real data from server
+        setTasks(prev => {
+          const filtered = prev.filter(t => !t.task_id.startsWith('temp-'));
+          return [...filtered, response.data];
+        });
+        // Update cache
+        setCache(prev => ({
+          ...prev,
+          cycleDetails: {
+            ...prev.cycleDetails,
+            [selectedCycle.incident_id]: {
+              ...prev.cycleDetails[selectedCycle.incident_id],
+              tasks: [...(prev.cycleDetails[selectedCycle.incident_id]?.tasks || []).filter(t => !t.task_id.startsWith('temp-')), response.data],
+              timestamp: Date.now()
+            }
+          }
+        }));
+        showToast(`Task created successfully! ID: ${response.data.task_no || 'N/A'}`, 'success');
+      }
     } catch (error) {
       console.error('Failed to save task:', error);
-      alert(error.response?.data?.detail || 'Failed to save task');
+      
+      // Revert optimistic update on error
+      if (isUpdate) {
+        // Revert to previous state
+        refreshTasks(selectedCycle.incident_id);
+      } else {
+        // Remove optimistic task
+        setTasks(prev => prev.filter(t => !t.task_id.startsWith('temp-')));
+      }
+      
+      showToast(error.response?.data?.detail || 'Failed to save task', 'error');
     }
   };
 
@@ -221,26 +553,84 @@ const CropCycleManagementComplete = () => {
   };
 
   const handleSubmitWorkOrder = async (data) => {
-  try {
-    const response = await cropCycleIncidentAPI.createWorkOrder(
-      selectedCycle.incident_id,
-      data
-    );
-
-    // ✅ Close WorkOrder modal
+    const isUpdate = !!editingWorkOrder;
+    const workOrderId = editingWorkOrder?.work_order_id;
+    
+    // Optimistic update
+    if (isUpdate) {
+      const workOrderIndex = workOrders.findIndex(wo => wo.work_order_id === workOrderId);
+      if (workOrderIndex !== -1) {
+        const oldWorkOrder = workOrders[workOrderIndex];
+        const optimisticWorkOrder = {
+          ...oldWorkOrder,
+          ...data,
+          work_order_id: oldWorkOrder.work_order_id,
+          work_order_no: oldWorkOrder.work_order_no,
+        };
+        setWorkOrders(prev => {
+          const updated = [...prev];
+          updated[workOrderIndex] = optimisticWorkOrder;
+          return updated;
+        });
+      }
+    } else {
+      const tempId = `temp-wo-${Date.now()}`;
+      const optimisticWorkOrder = {
+        work_order_id: tempId,
+        work_order_no: 'WO0000',
+        crop_cycle_id: selectedCycle.incident_id,
+        title: data.title || data.shortDesc || 'New Work Order',
+        description: data.description || '',
+        status: data.status || 'open',
+        ...data,
+      };
+      setWorkOrders(prev => [...prev, optimisticWorkOrder]);
+    }
+    
     setShowWorkOrderModal(false);
-
-    // ✅ Open WorkOrderResource screen
-    setSelectedWorkOrder(response.data);
-    setShowWorkOrderResource(true);
-
-    // Refresh cycle data
-    loadCycleDetail(selectedCycle.incident_id);
-  } catch (error) {
-    console.error("Failed to create work order:", error);
-    alert(error.response?.data?.detail || "Failed to create work order");
-  }
-};
+    setEditingWorkOrder(null);
+    
+    // Sync with server in background
+    try {
+      let response;
+      if (isUpdate) {
+        response = await cropCycleIncidentAPI.updateWorkOrder(
+          selectedCycle.incident_id,
+          workOrderId,
+          data
+        );
+        refreshWorkOrders(selectedCycle.incident_id);
+        showToast('Work order updated successfully!', 'success');
+      } else {
+        response = await cropCycleIncidentAPI.createWorkOrder(
+          selectedCycle.incident_id,
+          data
+        );
+        
+        // Replace optimistic work order with real data
+        setWorkOrders(prev => {
+          const filtered = prev.filter(wo => !wo.work_order_id.startsWith('temp-wo-'));
+          return [...filtered, response.data];
+        });
+        
+        // Open WorkOrderResource screen
+        setSelectedWorkOrder(response.data);
+        setShowWorkOrderResource(true);
+        showToast(`Work order created successfully! ID: ${response.data.work_order_no || 'N/A'}`, 'success');
+      }
+    } catch (error) {
+      console.error("Failed to save work order:", error);
+      
+      // Revert optimistic update
+      if (isUpdate) {
+        refreshWorkOrders(selectedCycle.incident_id);
+      } else {
+        setWorkOrders(prev => prev.filter(wo => !wo.work_order_id.startsWith('temp-wo-')));
+      }
+      
+      showToast(error.response?.data?.detail || "Failed to save work order", 'error');
+    }
+  };
 
 
   const handleDeleteCycle = async (id) => {
@@ -302,7 +692,8 @@ const CropCycleManagementComplete = () => {
     return colors[severity] || 'bg-gray-500 text-white';
   };
 
-  if (loading) {
+  // Only show full page loading for initial load
+  if (loading && viewMode === 'list' && cropCycles.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -349,9 +740,16 @@ const CropCycleManagementComplete = () => {
                 <div onClick={() => handleOpenCycle(cycle)} className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900 group-hover:text-primary-600 transition">
-                        {cycle.crop_name}
-                      </h3>
+                      <div className="flex items-center space-x-2 mb-1">
+                        <h3 className="text-lg font-bold text-gray-900 group-hover:text-primary-600 transition">
+                          {cycle.crop_name}
+                        </h3>
+                        {cycle.incident_no && (
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-mono font-semibold">
+                            {cycle.incident_no}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600">{cycle.field_id} • {cycle.crop_variety || 'No variety'}</p>
                     </div>
                     <span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(cycle.status)}`}>
@@ -429,6 +827,14 @@ const CropCycleManagementComplete = () => {
   if (viewMode === 'cycle-detail' && selectedCycle) {
     return (
       <div className="p-6">
+        {/* Toast Notification */}
+        {toast.show && (
+          <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg transition-all ${
+            toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+          }`}>
+            {toast.message}
+          </div>
+        )}
         <BreadcrumbNav path={breadcrumb} onNavigate={handleNavigate} />
         
         <button
@@ -450,9 +856,16 @@ const CropCycleManagementComplete = () => {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900">
-                {selectedCycle.crop_name} {selectedCycle.crop_variety && `- ${selectedCycle.crop_variety}`}
-              </h2>
+              <div className="flex items-center space-x-3 mb-2">
+                <h2 className="text-3xl font-bold text-gray-900">
+                  {selectedCycle.crop_name} {selectedCycle.crop_variety && `- ${selectedCycle.crop_variety}`}
+                </h2>
+                {selectedCycle.incident_no && (
+                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-mono font-semibold">
+                    {selectedCycle.incident_no}
+                  </span>
+                )}
+              </div>
               <p className="text-gray-600 mt-1">{selectedCycle.short_description}</p>
             </div>
             <div className="flex items-center space-x-2">
@@ -519,7 +932,12 @@ const CropCycleManagementComplete = () => {
             </button>
           </div>
 
-          {tasks.length === 0 ? (
+          {loadingStates.tasks ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+              <span className="ml-3 text-gray-600">Loading tasks...</span>
+            </div>
+          ) : tasks.length === 0 ? (
             <div className="text-center py-12">
               <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500 text-lg">No tasks yet. Create your first task to get started!</p>
@@ -539,8 +957,13 @@ const CropCycleManagementComplete = () => {
                   className="p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition cursor-pointer group"
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 flex-1">
                       <h4 className="font-semibold text-gray-900 text-sm group-hover:text-primary-600">{task.short_description}</h4>
+                      {task.task_no && (
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-mono font-semibold">
+                          {task.task_no}
+                        </span>
+                      )}
                       {task.is_voice_recorded === 'true' && (
                         <Mic className="w-3 h-3 text-blue-600" />
                       )}
@@ -613,6 +1036,14 @@ const CropCycleManagementComplete = () => {
   if (viewMode === 'task-detail' && selectedTask) {
     return (
       <div className="p-6">
+        {/* Toast Notification */}
+        {toast.show && (
+          <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg transition-all ${
+            toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+          }`}>
+            {toast.message}
+          </div>
+        )}
         <BreadcrumbNav path={breadcrumb} onNavigate={handleNavigate} />
         
         <button
@@ -625,7 +1056,16 @@ const CropCycleManagementComplete = () => {
 
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">{selectedTask.short_description}</h2>
+            <div>
+              <div className="flex items-center space-x-3 mb-2">
+                <h2 className="text-2xl font-bold text-gray-900">{selectedTask.short_description}</h2>
+                {selectedTask.task_no && (
+                  <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-sm font-mono font-semibold">
+                    {selectedTask.task_no}
+                  </span>
+                )}
+              </div>
+            </div>
             <div className="flex items-center space-x-2">
               {selectedTask.severity && (
                 <span className={`px-3 py-1 rounded text-sm font-bold ${getSeverityColor(selectedTask.severity)}`}>
@@ -787,7 +1227,14 @@ const CropCycleManagementComplete = () => {
                     className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition group"
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-semibold text-gray-900 text-sm group-hover:text-blue-600">{order.title}</h4>
+                      <div className="flex items-center space-x-2 flex-1">
+                        <h4 className="font-semibold text-gray-900 text-sm group-hover:text-blue-600">{order.title}</h4>
+                        {order.work_order_no && (
+                          <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-mono font-semibold">
+                            {order.work_order_no}
+                          </span>
+                        )}
+                      </div>
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
                         {order.status}
                       </span>

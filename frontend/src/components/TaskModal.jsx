@@ -243,13 +243,19 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) =
         {/* MAIN FORM (ALWAYS VISIBLE) */}
         <div className="p-6 grid md:grid-cols-2 gap-6">
           <Card title="📌 कार्य विवरण">
-            <Input
-              label="Task ID"
-              value={formData.task_id}
-              onChange={(e) =>
-                setFormData({ ...formData, task_id: e.target.value })
-              }
-            />
+            {/* ID Display (read-only when editing) or info message */}
+            {formData.task_id ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                <label className="text-sm font-medium text-blue-900 block mb-1">Task ID (Auto-generated)</label>
+                <p className="text-lg font-semibold text-blue-700">{formData.task_id}</p>
+              </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+                <p className="text-sm text-gray-600">
+                  <span className="font-semibold">Note:</span> ID will be auto-generated (e.g., TA0001)
+                </p>
+              </div>
+            )}
 
             <Select
               label="श्रेणी"
