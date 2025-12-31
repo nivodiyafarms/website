@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LayoutDashboard, FileText, Sprout, LogOut, Menu, X, Wheat } from 'lucide-react';
+import ChatbotBubble from './ChatbotBubble';
 
 const Layout = ({ children }) => {
   const { user, logout } = useAuth();
@@ -132,6 +133,9 @@ const Layout = ({ children }) => {
           onClick={() => setSidebarOpen(false)}
         ></div>
       )}
+
+      {/* Chatbot Bubble - Available on all pages */}
+      <ChatbotBubble />
     </div>
   );
 };

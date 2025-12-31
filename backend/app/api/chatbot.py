@@ -7,6 +7,7 @@ import json
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List
 from uuid import UUID
+from datetime import datetime
 import os
 import uuid as uuid_lib
 
@@ -15,6 +16,8 @@ from app.auth.security import get_current_user
 from app.models.user import User
 from app.services.chatbot_service import ChatbotService
 from app.services.groq_service import GroqService
+from app.services.openai_chatbot_service import OpenAIChatbotService
+from app.services.openai_service import OpenAIService
 from app.schemas.chatbot import *
 
 router = APIRouter(prefix="/api/chatbot", tags=["Chatbot"])
@@ -458,3 +461,140 @@ async def process_voice_input(
         except:
             pass
         raise HTTPException(status_code=500, detail=f"Error processing voice input: {str(e)}")
+
+
+# ============ OpenAI Chatbot Endpoints ============
+
+@router.post("/chat", response_model=ChatResponse)
+def chat_with_bot(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Main chat endpoint using OpenAI GPT-4 with function calling"""
+    try:
+        # Check if OpenAI API key is configured
+        from app.core.config import settings
+        if not settings.OPENAI_API_KEY:
+            raise HTTPException(
+                status_code=400,
+                detail="OpenAI API key is not configured. Please add OPENAI_API_KEY to your .env file."
+            )
+        
+        chatbot_service = OpenAIChatbotService(db)
+        
+        response = chatbot_service.chat(
+            user_message=request.user_message,
+            conversation_id=request.conversation_id,
+            current_user_id=current_user.id
+        )
+        
+        # Ensure all required fields are present
+        if "conversation_id" not in response:
+            response["conversation_id"] = request.conversation_id or f"conv_{datetime.now().timestamp()}"
+        if "language" not in response:
+            response["language"] = "en"
+        if "action_taken" not in response:
+            response["action_taken"] = None
+        if "created_item" not in response:
+            response["created_item"] = None
+        
+        return ChatResponse(**response)
+        
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        import traceback
+        error_msg = str(ve)
+        print(f"ValueError in chat: {error_msg}")
+        print(traceback.format_exc())
+        if "OPENAI_API_KEY" in error_msg:
+            raise HTTPException(
+                status_code=400,
+                detail="OpenAI API key is not configured. Please add OPENAI_API_KEY to your .env file and restart the server."
+            )
+        raise HTTPException(status_code=400, detail=f"Chatbot unavailable: {error_msg}")
+    except Exception as e:
+        import traceback
+        print(f"Error in chat: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error in chat: {str(e)}")
+
+
+@router.post("/voice", response_model=ChatResponse)
+async def chat_with_voice(
+    audio: UploadFile = File(...),
+    conversation_id: str = Form(None),
+    language: str = Form("auto"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Voice input endpoint - transcribes audio and processes with chatbot"""
+    try:
+        # Save audio file
+        audio_id = str(uuid_lib.uuid4())
+        audio_extension = audio.filename.split('.')[-1] if '.' in audio.filename else 'wav'
+        audio_filename = f"{audio_id}.{audio_extension}"
+        audio_path = os.path.join(AUDIO_DIR, audio_filename)
+        
+        with open(audio_path, "wb") as buffer:
+            content = await audio.read()
+            buffer.write(content)
+        
+        # Transcribe audio using OpenAI Whisper
+        try:
+            openai_service = OpenAIService()
+            lang_param = None if language == "auto" else language
+            transcript = openai_service.transcribe_audio(audio_path, lang_param)
+        except Exception as transcribe_error:
+            # Clean up audio file
+            try:
+                os.remove(audio_path)
+            except:
+                pass
+            raise HTTPException(status_code=500, detail=f"Error transcribing audio: {str(transcribe_error)}")
+        
+        # Process transcript with chatbot
+        chatbot_service = OpenAIChatbotService(db)
+        
+        response = chatbot_service.chat(
+            user_message=transcript,
+            conversation_id=conversation_id,
+            current_user_id=current_user.id
+        )
+        
+        # Clean up audio file
+        try:
+            os.remove(audio_path)
+        except:
+            pass
+        
+        return ChatResponse(**response)
+        
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"Chatbot unavailable: {str(ve)}")
+    except Exception as e:
+        # Clean up audio file on error
+        try:
+            if 'audio_path' in locals():
+                os.remove(audio_path)
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=f"Error processing voice input: {str(e)}")
+
+
+@router.post("/context/clear")
+def clear_context(
+    conversation_id: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Clear conversation context"""
+    try:
+        chatbot_service = OpenAIChatbotService(db)
+        chatbot_service.clear_context(conversation_id)
+        return {"success": True, "message": "Context cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing context: {str(e)}")

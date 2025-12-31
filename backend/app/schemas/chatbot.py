@@ -143,3 +143,23 @@ class FormValidationResponse(BaseModel):
     errors: List[str] = Field(default_factory=list, description="Validation errors")
     missing_fields: List[str] = Field(default_factory=list, description="Missing required fields")
     suggestions: List[str] = Field(default_factory=list, description="Suggestions for improvement")
+
+
+# ============ OpenAI Chatbot Schemas ============
+
+class ChatRequest(BaseModel):
+    user_message: str = Field(..., description="User's message (text or transcribed voice)")
+    conversation_id: Optional[str] = Field(None, description="Conversation ID for context")
+
+
+class ChatResponse(BaseModel):
+    bot_message: str = Field(..., description="Bot's response message")
+    action_taken: Optional[str] = Field(None, description="Action taken: create, query, or None")
+    created_item: Optional[Dict[str, Any]] = Field(None, description="Details of created item if action was create")
+    language: str = Field(..., description="Detected language: hi or en")
+    conversation_id: str = Field(..., description="Conversation ID for context")
+
+
+class VoiceRequest(BaseModel):
+    conversation_id: Optional[str] = Field(None, description="Conversation ID for context")
+    language: Optional[str] = Field(None, description="Language hint: hi, en, or auto")

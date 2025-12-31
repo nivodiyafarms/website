@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     GROQ_API_KEY: Optional[str] = None  # Optional - voice feature won't work without it
+    OPENAI_API_KEY: Optional[str] = None  # Optional - chatbot feature won't work without it
     
     model_config = ConfigDict(
         env_file=".env",

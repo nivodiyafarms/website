@@ -114,5 +114,41 @@ export const cropCycleIncidentAPI = {
   deleteWorkOrder: (cycleId, orderId) => api.delete(`/crop-cycle-incidents/${cycleId}/work-orders/${orderId}`),
 };
 
+// Chatbot APIs
+export const chatbotAPI = {
+  sendMessage: async (message, conversationId = null) => {
+    const response = await api.post('/api/chatbot/chat', {
+      user_message: message,
+      conversation_id: conversationId
+    });
+    return response.data;
+  },
+  sendVoice: async (audioBlob, conversationId = null) => {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.wav');
+    if (conversationId) {
+      formData.append('conversation_id', conversationId);
+    }
+    formData.append('language', 'auto');
+    
+    const response = await api.post('/api/chatbot/voice', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+  clearContext: async (conversationId) => {
+    const formData = new FormData();
+    formData.append('conversation_id', conversationId);
+    const response = await api.post('/api/chatbot/context/clear', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+};
+
 export default api;
 
