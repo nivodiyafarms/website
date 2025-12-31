@@ -311,6 +311,10 @@ def get_crop_cycle(
     if cycle.expected_harvest_date:
         expected_harvest_date_dt = datetime.combine(cycle.expected_harvest_date, datetime.min.time())
     
+    # Provide defaults for current_stage and status if None
+    current_stage_value = cycle.current_stage or CropStage.SOWING
+    status_value = cycle.status or CropCycleStatus.OPEN
+    
     return CropCycleIncidentResponse(
         incident_id=cycle.id,
         incident_no=cycle.incident_no,  # Auto-generated ID (IN0001, etc.)
@@ -319,8 +323,8 @@ def get_crop_cycle(
         crop_variety=cycle.seed_category,
         sowing_date=sowing_date_dt,
         expected_harvest_date=expected_harvest_date_dt,
-        current_stage=cycle.current_stage,
-        status=cycle.status,
+        current_stage=current_stage_value,
+        status=status_value,
         supervisor_id=cycle.created_by,
         season=cycle.season,
         short_description=cycle.short_description,

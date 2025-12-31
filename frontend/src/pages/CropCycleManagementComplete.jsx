@@ -184,13 +184,35 @@ const CropCycleManagementComplete = () => {
 
   const handleSubmitTask = async (data) => {
     try {
-      await cropCycleIncidentAPI.createTask(selectedCycle.incident_id, data);
+      if (editingTask) {
+        // Update existing task
+        await cropCycleIncidentAPI.updateTask(selectedCycle.incident_id, editingTask.task_id, data);
+      } else {
+        // Create new task
+        await cropCycleIncidentAPI.createTask(selectedCycle.incident_id, data);
+      }
       setShowTaskModal(false);
+      setEditingTask(null);
       loadCycleDetail(selectedCycle.incident_id);
     } catch (error) {
-      console.error('Failed to create task:', error);
-      alert(error.response?.data?.detail || 'Failed to create task');
+      console.error('Failed to save task:', error);
+      alert(error.response?.data?.detail || 'Failed to save task');
     }
+  };
+
+  const handleUpdateTask = () => {
+    setEditingTask(selectedTask);
+    setShowTaskModal(true);
+  };
+
+  const handleCloseTask = () => {
+    // Set task to editing mode with status CLOSED
+    // Map to Hindi status for the form, backend will convert it
+    setEditingTask({
+      ...selectedTask,
+      status: 'बंद', // Hindi status for form, will be converted to 'closed' by transformer
+    });
+    setShowTaskModal(true);
   };
 
   const handleCreateWorkOrder = () => {
@@ -616,6 +638,27 @@ const CropCycleManagementComplete = () => {
             </div>
           </div>
 
+          {/* Update/Close Task Buttons - Prominently placed near header */}
+          {selectedTask.status !== 'closed' && selectedTask.status !== 'CLOSED' && 
+           selectedTask.status !== 'cancelled' && selectedTask.status !== 'CANCELLED' && (
+            <div className="mb-6 flex items-center justify-end space-x-3 pb-4 border-b">
+              <button
+                onClick={handleUpdateTask}
+                className="px-4 py-2 border-2 border-primary-500 text-primary-700 rounded-lg hover:bg-primary-50 transition flex items-center space-x-2 font-semibold"
+              >
+                <Edit className="w-5 h-5" />
+                <span>Update Task</span>
+              </button>
+              <button
+                onClick={handleCloseTask}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition flex items-center space-x-2 font-semibold shadow-md"
+              >
+                <AlertCircle className="w-5 h-5" />
+                <span>Close Task</span>
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-blue-50 p-4 rounded-lg">
               <p className="text-sm text-blue-700">Task Type</p>
@@ -795,6 +838,26 @@ const CropCycleManagementComplete = () => {
 
           {/* Action Buttons */}
           <div className="mt-6 flex items-center justify-end space-x-3 pt-6 border-t">
+            {/* Only show Update/Close buttons if task is not already closed/cancelled */}
+            {selectedTask.status !== 'closed' && selectedTask.status !== 'CLOSED' && 
+             selectedTask.status !== 'cancelled' && selectedTask.status !== 'CANCELLED' && (
+              <>
+                <button
+                  onClick={handleUpdateTask}
+                  className="px-4 py-2 border border-primary-300 text-primary-700 rounded-lg hover:bg-primary-50 transition flex items-center space-x-2"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span>Update Task</span>
+                </button>
+                <button
+                  onClick={handleCloseTask}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition flex items-center space-x-2"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Close Task</span>
+                </button>
+              </>
+            )}
             <button
               onClick={() => handleDeleteTask(selectedTask.task_id)}
               className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition"
@@ -805,7 +868,7 @@ const CropCycleManagementComplete = () => {
               onClick={handleBack}
               className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition"
             >
-              Close
+              Back
             </button>
           </div>
         </div>
@@ -816,7 +879,6 @@ const CropCycleManagementComplete = () => {
           onClose={() => { setShowTaskModal(false); setEditingTask(null); }}
           onSubmit={handleSubmitTask}
           cropCycleId={selectedCycle.incident_id}
-          workers={users}
           editing={editingTask}
         />
 

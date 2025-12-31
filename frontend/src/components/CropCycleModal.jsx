@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { X, Mic, Bot } from "lucide-react";
+import { transformCropCycleRequest } from "../utils/apiTransformers";
 
 export default function IncidentModal({ isOpen, onClose, onSubmit }) {
-  if (!isOpen) return null;
-
   const [activeTab, setActiveTab] = useState("Notes");
   const [showAiAssistant, setShowAiAssistant] = useState(false);
 
@@ -128,7 +127,11 @@ const handleBeejCategoryChange = (e) => {
     }
   }, [formData.sthiti, formData.resolvedDate]);
 
-  const handleSubmit = () => onSubmit(formData);
+  const handleSubmit = () => {
+    // Transform form data from Hindi field names to English backend field names
+    const transformedData = transformCropCycleRequest(formData);
+    onSubmit(transformedData);
+  };
 
   /* ================= OPTIONS ================= */
   const khetOptions = [
@@ -245,6 +248,8 @@ const handleBeejCategoryChange = (e) => {
       </div>
     );
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">

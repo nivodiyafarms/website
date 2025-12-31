@@ -2,6 +2,27 @@ import React, { useState, useEffect } from "react";
 import { X, Bot, AlertTriangle } from "lucide-react";
 import ChatbotModal from "./ChatbotModal";
 import VoiceRecorder from "./VoiceRecorder";
+import { transformTaskRequest } from "../utils/apiTransformers";
+
+// Reverse mapping: English status → Hindi status (for form display)
+const STATUS_REVERSE_MAPPING = {
+  "new": "नया",
+  "NEW": "नया",
+  "in_progress": "प्रगति पर",
+  "IN_PROGRESS": "प्रगति पर",
+  "on_hold": "रोक पर",
+  "ON_HOLD": "रोक पर",
+  "resolved": "समाधान किया गया",
+  "RESOLVED": "समाधान किया गया",
+  "closed": "बंद",
+  "CLOSED": "बंद",
+  "delayed": "विलंबित",
+  "DELAYED": "विलंबित",
+  "cancelled": "रद्द किया गया",
+  "CANCELLED": "रद्द किया गया",
+  "reopened": "पुनः खोला गया",
+  "REOPENED": "पुनः खोला गया",
+};
 
 /* ------------------ CATEGORY & SUBCATEGORY ------------------ */
 
@@ -34,7 +55,42 @@ const statusFlow = [
   "पुनः खोला गया",
 ];
 
-const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId }) => {
+// Reverse mapping: task_type (English) → category (Hindi)
+// This helps map backend task_type back to form category when editing
+const TASK_TYPE_TO_CATEGORY = {
+  "irrigation": "सिंचाई",
+  "fertilizer": "खाद",
+  "pesticide": "खाद", // Pesticide is under खाद category
+  "harvest": "कटाई",
+  "transport": "ईंधन",
+  "sale": "बिक्री",
+  "storage_in": "भंडार",
+  "storage_out": "भंडार",
+  "other": "बुआई", // Default fallback
+};
+
+// Helper function to find category from task_type and sub_type
+function findCategoryFromTaskType(taskType, subType) {
+  if (!taskType) return "";
+  
+  // First try direct mapping
+  if (TASK_TYPE_TO_CATEGORY[taskType]) {
+    return TASK_TYPE_TO_CATEGORY[taskType];
+  }
+  
+  // Try to find category by checking sub_type in categories
+  if (subType) {
+    for (const [category, subCategories] of Object.entries(categories)) {
+      if (subCategories.includes(subType)) {
+        return category;
+      }
+    }
+  }
+  
+  return ""; // Return empty if not found
+}
+
+const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) => {
   const [activeTab, setActiveTab] = useState("Notes");
   const [showChatbot, setShowChatbot] = useState(false);
 
@@ -50,21 +106,84 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId }) => {
     notes: "",
     expected_resolution_date: "",
     resolution_notes: "",
+    update_notes: "", // For task updates/closes
   });
+
+  // Load edit data when editing prop changes
+  useEffect(() => {
+    if (editing) {
+      // Map backend status (English) to Hindi for form display
+      const backendStatus = editing.status || "";
+      const hindiStatus = STATUS_REVERSE_MAPPING[backendStatus] || backendStatus || "नया";
+      
+      // Map task_type back to category for form display
+      const taskType = editing.task_type || editing.type || "";
+      const subType = editing.sub_type || editing.sub_category || "";
+      const mappedCategory = editing.category || findCategoryFromTaskType(taskType, subType);
+      
+      // Map backend response to frontend form format
+      setFormData({
+        task_id: editing.task_id || editing.id || "",
+        category: mappedCategory,
+        sub_category: subType,
+        status: hindiStatus, // Convert English status to Hindi for form
+        opened_by: editing.opened_by || editing.created_by_id || "",
+        opened_date: editing.opened_date || editing.occurred_at || "",
+        short_description: editing.short_description || "",
+        description: editing.description || "",
+        notes: editing.notes || "",
+        expected_resolution_date: editing.expected_resolution_date || editing.resolved_at || "",
+        resolution_notes: editing.resolution_notes || "",
+        update_notes: "", // Always start empty for new updates
+      });
+    } else {
+      // Reset form when not editing
+      setFormData({
+        task_id: "",
+        category: "",
+        sub_category: "",
+        status: "नया",
+        opened_by: "",
+        opened_date: "",
+        short_description: "",
+        description: "",
+        notes: "",
+        expected_resolution_date: "",
+        resolution_notes: "",
+        update_notes: "",
+      });
+    }
+  }, [editing, isOpen]);
 
   /* ---------------- STATUS BASED LOGIC ---------------- */
   useEffect(() => {
-    if (formData.status === "समाधान किया गया") {
+    if (formData.status === "समाधान किया गया" || formData.status === "resolved" || formData.status === "RESOLVED") {
       setActiveTab("Resolution Information");
     }
-    if (formData.status === "पुनः खोला गया") {
+    if (formData.status === "पुनः खोला गया" || formData.status === "reopened" || formData.status === "REOPENED") {
       setActiveTab("Notes");
     }
-  }, [formData.status]);
+    // If editing and status is closed, ensure Notes tab is active to show update notes
+    if (editing && (formData.status === "बंद" || formData.status === "closed" || formData.status === "CLOSED")) {
+      setActiveTab("Notes");
+    }
+  }, [formData.status, editing]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    
+    // Validate update_notes when updating/closing
+    const isClosing = formData.status === "बंद" || formData.status === "समाधान किया गया";
+    const isUpdating = editing !== null;
+    
+    if ((isClosing || isUpdating) && !formData.update_notes?.trim()) {
+      alert("कृपया अपडेट/बंद करने का कारण दर्ज करें (Please provide a reason for updating/closing this task)");
+      return;
+    }
+    
+    // Transform form data to match backend schema
+    const transformedData = transformTaskRequest(formData);
+    onSubmit(transformedData);
     onClose();
   };
 
@@ -104,15 +223,17 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId }) => {
       >
         {/* HEADER */}
         <div className="flex justify-between items-center px-6 py-4 bg-green-600 text-white rounded-t-3xl">
-          <h2 className="text-xl font-bold">🌾 Task Form</h2>
+          <h2 className="text-xl font-bold">{editing ? "✏️ Edit Task" : "🌾 Task Form"}</h2>
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setShowChatbot(true)}
-              className="bg-white/20 px-3 py-1 rounded flex gap-2"
-            >
-              <Bot size={18} /> AI
-            </button>
+            {!editing && (
+              <button
+                type="button"
+                onClick={() => setShowChatbot(true)}
+                className="bg-white/20 px-3 py-1 rounded flex gap-2"
+              >
+                <Bot size={18} /> AI
+              </button>
+            )}
             <button type="button" onClick={onClose}>
               <X />
             </button>
@@ -227,6 +348,27 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId }) => {
                 label="समाधान विवरण"
                 field="resolution_notes"
                 rows={4}
+              />
+            </Card>
+          )}
+
+          {/* Update Notes - Required when updating or closing */}
+          {(editing || formData.status === "बंद" || formData.status === "समाधान किया गया") && (
+            <Card title="📝 अपडेट नोट्स (अनिवार्य)">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ कृपया इस कार्य को अपडेट/बंद करने का कारण दर्ज करें
+                </p>
+              </div>
+              <textarea
+                className="w-full border p-4 rounded-xl"
+                rows={3}
+                value={formData.update_notes}
+                onChange={(e) =>
+                  setFormData({ ...formData, update_notes: e.target.value })
+                }
+                placeholder="अपडेट/बंद करने का कारण लिखें..."
+                required
               />
             </Card>
           )}

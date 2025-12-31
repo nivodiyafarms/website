@@ -19,7 +19,7 @@ const STATUS_MAPPING = {
 };
 
 /**
- * Stage mapping (Hindi → English lowercase)
+ * Stage mapping (Hindi → English lowercase - CropStage enum)
  */
 const STAGE_MAPPING = {
   "बुआई": "sowing",
@@ -30,6 +30,15 @@ const STAGE_MAPPING = {
   "भंडार": "storage",
   "बिक्री": "sale",
   "भुगतान": "payment",
+};
+
+/**
+ * Season mapping (Hindi → English)
+ */
+const SEASON_MAPPING = {
+  "रबी": "Rabi",
+  "खरीफ": "Kharif",
+  "जायद": "Zaid",
 };
 
 /**
@@ -47,15 +56,79 @@ const TASK_STATUS_MAPPING = {
 };
 
 /**
- * Task Type mapping (Hindi Category → English lowercase)
+ * Task Type mapping (Hindi Category + Sub Category → TaskType enum)
+ * Maps category/sub_category combinations to TaskType enum values
  */
 const TASK_TYPE_MAPPING = {
+  // बुआई (Sowing) category
+  "बुआई": "other", // Default for sowing category
+  "खरार": "other",
+  "रोटावेटर": "other",
+  "मल्चर": "other",
+  "पस्टार": "other",
+  "बोइनी": "other",
+  "प्लाउ": "other",
+  
+  // सिंचाई (Irrigation) category
   "सिंचाई": "irrigation",
-  "विद्युत": "electrical",
-  "सड़क": "road",
+  "पलेवा (बीज बोने से पहले)": "irrigation",
+  "पहली पानी": "irrigation",
+  "दूसरी पानी": "irrigation",
+  "तीसरी पानी": "irrigation",
+  "चौथी पानी": "irrigation",
+  "पाँचवीं पानी": "irrigation",
+  "ठेका सिंचाई": "irrigation",
+  
+  // खाद (Fertilizer) category
+  "खाद": "fertilizer",
+  "बीज उपचार": "fertilizer",
+  "डीएपी": "fertilizer",
+  "यूरिया": "fertilizer",
+  "दवाई": "pesticide",
+  "पोटाश": "fertilizer",
+  "जिंक": "fertilizer",
+  "सल्फर": "fertilizer",
+  "सुपर": "fertilizer",
+  
+  // कटाई (Harvest) category
+  "कटाई": "harvest",
+  "थ्रेसर": "harvest",
+  "हार्वेस्टर": "harvest",
+  "पंखा": "harvest",
+  "ठेका कटाई": "harvest",
+  
+  // ईंधन (Fuel) category
+  "ईंधन": "transport",
+  "डीज़ल": "transport",
+  "पेट्रोल": "transport",
+  
+  // बिक्री (Sale) category
+  "बिक्री": "sale",
+  "मंडी बिक्री": "sale",
+  "सोसाइटी बिक्री": "sale",
+  
+  // भंडार (Storage) category
+  "भंडार": "storage_in",
+  "खेत क्रमांक": "storage_in",
+  "वेयरहाउस": "storage_in",
+  "अन्य (इनपुट परीक्षण)": "storage_in",
+  
   // Default fallback
   "": "other",
 };
+
+/**
+ * Map category and sub_category to task_type
+ */
+function mapCategoryToTaskType(category, subCategory) {
+  if (subCategory && TASK_TYPE_MAPPING[subCategory]) {
+    return TASK_TYPE_MAPPING[subCategory];
+  }
+  if (category && TASK_TYPE_MAPPING[category]) {
+    return TASK_TYPE_MAPPING[category];
+  }
+  return "other"; // Default fallback
+}
 
 /**
  * Work Order Status mapping (English → English lowercase)
@@ -135,26 +208,73 @@ export function transformCropCycleRequest(data) {
   const hasValue = (val) => val !== undefined && val !== null && val !== '';
 
   // Field name mappings - only include if not empty
+  // Map khet → field_id
   if (hasValue(data.khet)) transformed.field_id = data.khet;
+  
+  // Map buwaiDate → sowing_date (convert to ISO datetime)
   if (hasValue(data.buwaiDate)) {
     const formattedDate = formatDate(data.buwaiDate);
     if (formattedDate) transformed.sowing_date = formattedDate;
   }
+  
+  // Map katayiDate → expected_harvest_date (convert to ISO datetime)
   if (hasValue(data.katayiDate)) {
     const formattedDate = formatDate(data.katayiDate);
     if (formattedDate) transformed.expected_harvest_date = formattedDate;
   }
+  
+  // Map vartman_charan → current_stage (map Hindi to CropStage enum)
   if (hasValue(data.vartman_charan)) {
     transformed.current_stage = STAGE_MAPPING[data.vartman_charan] || data.vartman_charan;
   }
-  if (hasValue(data.varnan)) transformed.description = data.varnan;
-  if (hasValue(data.tipanni)) transformed.notes = data.tipanni;
-  if (hasValue(data.season)) transformed.season = data.season;
-  if (hasValue(data.fasal_naam)) transformed.crop_name = data.fasal_naam;
+  
+  // Map varnan → short_description
+  if (hasValue(data.varnan)) transformed.short_description = data.varnan;
+  
+  // Map tipanni → description
+  if (hasValue(data.tipanni)) transformed.description = data.tipanni;
+  
+  // Map season (Hindi to English: रबी→Rabi, खरीफ→Kharif, जायद→Zaid)
+  if (hasValue(data.season)) {
+    transformed.season = SEASON_MAPPING[data.season] || data.season;
+  }
+  
+  // Map fasal → crop_name
+  if (hasValue(data.fasal)) transformed.crop_name = data.fasal;
+  if (hasValue(data.fasal_naam)) transformed.crop_name = data.fasal_naam; // Also handle fasal_naam for compatibility
+  
+  // Map beej_category → crop_variety
   if (hasValue(data.beej_category)) transformed.crop_variety = data.beej_category;
+  
+  // Map rakba → cultivated_area (if needed)
+  if (hasValue(data.rakba)) {
+    const area = parseFloat(data.rakba);
+    if (!isNaN(area)) transformed.cultivated_area = area;
+  }
+  
+  // Map sthiti → status (map Hindi to CropCycleStatus enum)
   if (hasValue(data.sthiti)) {
     transformed.status = STATUS_MAPPING[data.sthiti] || data.sthiti;
   }
+  
+  // Map notes → notes (will be merged into description by backend)
+  if (hasValue(data.notes)) transformed.notes = data.notes;
+  
+  // Transform resolution fields
+  if (hasValue(data.totalExpense)) {
+    const expense = parseFloat(data.totalExpense);
+    if (!isNaN(expense)) transformed.total_expense = expense;
+  }
+  if (hasValue(data.totalRevenue)) {
+    const revenue = parseFloat(data.totalRevenue);
+    if (!isNaN(revenue)) transformed.total_revenue = revenue;
+  }
+  if (hasValue(data.actualHarvestDate)) {
+    const formattedDate = formatDate(data.actualHarvestDate);
+    if (formattedDate) transformed.actual_harvest_date = formattedDate;
+  }
+  if (hasValue(data.resolutionComments)) transformed.resolution_comments = data.resolutionComments;
+  if (hasValue(data.observation)) transformed.observation = data.observation;
 
   // Handle English field names (for updates or direct API calls)
   if (hasValue(data.field_id)) transformed.field_id = data.field_id;
@@ -220,8 +340,9 @@ export function transformTaskRequest(data) {
 
   // Field name mappings
   // CRITICAL: task_type is required by database (type NOT NULL)
-  if (data.category !== undefined && data.category) {
-    transformed.task_type = TASK_TYPE_MAPPING[data.category] || data.category || 'other';
+  // Map category + sub_category → task_type (TaskType enum)
+  if (data.category !== undefined || data.sub_category !== undefined) {
+    transformed.task_type = mapCategoryToTaskType(data.category, data.sub_category);
   } else if (data.task_type !== undefined && data.task_type) {
     transformed.task_type = TASK_TYPE_MAPPING[data.task_type] || data.task_type;
   } else if (data.type !== undefined && data.type) {
@@ -233,17 +354,43 @@ export function transformTaskRequest(data) {
   
   console.log('🔄 Task transformer - task_type set to:', transformed.task_type);
   
+  // Map sub_category → sub_type
   if (data.sub_category !== undefined) transformed.sub_type = data.sub_category;
   if (data.short_description !== undefined) transformed.short_description = data.short_description;
   if (data.description !== undefined) transformed.description = data.description;
+  
+  // Map status (Hindi) → status (TaskStatus enum)
   if (data.status !== undefined) {
-    transformed.status = TASK_STATUS_MAPPING[data.status] || data.status;
+    // Handle both Hindi and English status values
+    const statusValue = data.status;
+    if (TASK_STATUS_MAPPING[statusValue]) {
+      transformed.status = TASK_STATUS_MAPPING[statusValue];
+    } else if (typeof statusValue === 'string') {
+      // If already in lowercase English, use as-is
+      transformed.status = statusValue.toLowerCase();
+    } else {
+      transformed.status = statusValue;
+    }
   }
+  // Map opened_date → occurred_at (convert to ISO datetime)
   if (data.opened_date !== undefined) transformed.occurred_at = formatDate(data.opened_date);
+  
+  // Map expected_resolution_date → resolved_at if needed
   if (data.expected_resolution_date !== undefined) transformed.resolved_at = formatDate(data.expected_resolution_date);
+  
+  // Handle existing fields
   if (data.sub_type !== undefined) transformed.sub_type = data.sub_type;
   if (data.occurred_at !== undefined) transformed.occurred_at = formatDate(data.occurred_at);
   if (data.resolved_at !== undefined) transformed.resolved_at = formatDate(data.resolved_at);
+  
+  // Map resolution_notes → description (append to description)
+  if (data.resolution_notes !== undefined && data.resolution_notes) {
+    if (transformed.description) {
+      transformed.description = `${transformed.description}\n\nResolution Notes: ${data.resolution_notes}`;
+    } else {
+      transformed.description = `Resolution Notes: ${data.resolution_notes}`;
+    }
+  }
   
   // Handle update_notes for task updates
   if (data.update_notes !== undefined) transformed.update_notes = data.update_notes;
@@ -317,24 +464,36 @@ export function transformWorkOrderRequest(data) {
   const transformed = {};
 
   // Field name mappings
+  // Map shortDesc → title (required field)
   if (data.shortDesc !== undefined) transformed.title = data.shortDesc;
+  
+  // Map description → description
   if (data.description !== undefined) {
     transformed.description = data.description;
   }
-  // Handle instructions - schema accepts it as optional
-  if (data.instructions !== undefined) {
-    transformed.instructions = data.instructions;
+  
+  // Map instructions → remove (not in database, can be merged into description)
+  // If instructions exist and description is empty, use instructions as description
+  if (data.instructions !== undefined && data.instructions && !transformed.description) {
+    transformed.description = data.instructions;
   }
+  
+  // Map assigned_to_id → assigned_to_id
   if (data.assigned_to_id !== undefined) transformed.assigned_to_id = data.assigned_to_id;
+  
+  // Map due_date → due_date (convert to ISO datetime)
+  if (data.due_date !== undefined) transformed.due_date = formatDate(data.due_date);
+  
+  // Map status → status (WorkOrderStatus enum)
   if (data.status !== undefined) {
     transformed.status = WORK_ORDER_STATUS_MAPPING[data.status] || data.status;
   }
-  if (data.due_date !== undefined) transformed.due_date = formatDate(data.due_date);
+  
+  // Handle closed_at if provided
   if (data.actualResolvedDate !== undefined) transformed.closed_at = formatDate(data.actualResolvedDate);
 
   // Handle English field names (for updates)
   if (data.title !== undefined) transformed.title = data.title;
-  if (data.instructions !== undefined) transformed.instructions = data.instructions;
   if (data.closed_at !== undefined) transformed.closed_at = formatDate(data.closed_at);
 
   // Set created_by from current user
@@ -352,8 +511,17 @@ export function transformWorkOrderRequest(data) {
   // Copy task_id if present (for linking work order to task)
   if (data.task_id !== undefined) transformed.task_id = data.task_id;
 
+  // Ensure title is always provided (required field)
+  if (!transformed.title && data.shortDesc) {
+    transformed.title = data.shortDesc;
+  }
+  if (!transformed.title && data.title) {
+    transformed.title = data.title;
+  }
+
   // Remove fields not in backend schema
-  // holdReason, expectedDate, resolutionComments, observation, comments, attachments are removed
+  // workOrderId, holdReason, expectedDate, actualResolvedDate, resolutionComments, 
+  // observation, comments, attachments are removed (these belong to tasks, not work orders)
 
   return transformed;
 }
@@ -483,4 +651,25 @@ export function isWorkOrderUrl(url) {
 export function isCreateOrUpdate(method) {
   return method === 'post' || method === 'put';
 }
+
+// ============ Export Helper Functions ============
+
+/**
+ * Map Hindi status strings to enum values
+ */
+export function mapHindiStatusToEnum(status) {
+  return TASK_STATUS_MAPPING[status] || status;
+}
+
+/**
+ * Map Hindi stage strings to CropStage enum
+ */
+export function mapHindiStageToEnum(stage) {
+  return STAGE_MAPPING[stage] || stage;
+}
+
+/**
+ * Map category/sub_category to TaskType enum
+ */
+export { mapCategoryToTaskType };
 

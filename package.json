@@ -1,0 +1,24 @@
+{
+  "name": "website",
+  "version": "1.0.0",
+  "description": "A full-stack web application for managing crop cycles, fields, and farm operations at Nivodiya Farms.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nivodiyafarms/website.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/nivodiyafarms/website/issues"
+  },
+  "homepage": "https://github.com/nivodiyafarms/website#readme",
+  "dependencies": {
+    "lucide-react": "^0.555.0"
+  }
+}

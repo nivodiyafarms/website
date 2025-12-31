@@ -19,8 +19,20 @@ const NotesInterface = ({ cropCycleId }) => {
     loadNotes();
   }, [cropCycleId]);
 
+  // Track previous notes length to detect new notes
+  const prevNotesLengthRef = useRef(0);
+  
   useEffect(() => {
-    scrollToBottom();
+    // Only auto-scroll when a new note is added (length increases)
+    if (notes.length > prevNotesLengthRef.current) {
+      const timer = setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+      prevNotesLengthRef.current = notes.length;
+      return () => clearTimeout(timer);
+    } else {
+      prevNotesLengthRef.current = notes.length;
+    }
   }, [notes]);
 
   const scrollToBottom = () => {

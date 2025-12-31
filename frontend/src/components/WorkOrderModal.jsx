@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ClipboardList, Bot } from 'lucide-react';
 import ChatbotModal from './ChatbotModal';
 import VoiceRecorder from './VoiceRecorder';
+import { transformWorkOrderRequest } from '../utils/apiTransformers';
 
 const WorkOrderModal = ({
   isOpen,
@@ -117,11 +118,14 @@ const WorkOrderModal = ({
       return;
     }
 
-    onSubmit({
+    // Transform form data to match backend schema
+    const transformedData = transformWorkOrderRequest({
       crop_cycle_id: cropCycleId,
       ...formData,
       due_date: formData.due_date || null,
     });
+
+    onSubmit(transformedData);
   };
 
   if (!isOpen) return null;
