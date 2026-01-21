@@ -31,8 +31,8 @@ class GeneralExpense(Base):
     related_type = Column(String(10), nullable=True)
     related_id = Column(UUID(as_uuid=True), nullable=True)
     
-    # Assignment
-    created_by = Column(UUID(as_uuid=True), ForeignKey("auth.users.id"), nullable=True)
+    # Assignment (FK to users.user_id)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)

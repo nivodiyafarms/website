@@ -113,8 +113,9 @@ const WorkOrderModal = ({
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (!formData.shortDesc || !formData.description || !formData.assigned_to_id) {
-      alert('संक्षिप्त विवरण, विवरण और Assigned To आवश्यक है');
+    // CRITICAL: Only title (shortDesc) is required by database, not description
+    if (!formData.shortDesc || !formData.shortDesc.trim()) {
+      alert('संक्षिप्त विवरण (Short Description) आवश्यक है');
       return;
     }
 

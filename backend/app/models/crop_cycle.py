@@ -71,8 +71,8 @@ class CropCycle(Base):
     total_revenue = Column(Numeric, nullable=True, default=0)  # New field
     profit = Column(Numeric, nullable=True, default=0)  # New field
     
-    # Created By (FK to auth.users)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("auth.users.id"), nullable=True)
+    # Created By (FK to users.user_id)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)  # Changed from NOT NULL
@@ -81,7 +81,7 @@ class CropCycle(Base):
     # Relationships
     # Note: field relationship removed since field_code is TEXT, not FK
     # Note: supervisor relationship removed since created_by is the user reference
-    tasks = relationship("Task", back_populates="crop_cycle", foreign_keys="Task.crop_cycle_id")
+    # Note: tasks relationship removed - tasks belong to crop_cycle_incidents, not crop_cycles
     notes = relationship("Note", primaryjoin="and_(foreign(Note.related_id)==CropCycle.id, Note.related_type=='crop_cycle')", viewonly=True)
     
     # Property aliases for backward compatibility (if needed)

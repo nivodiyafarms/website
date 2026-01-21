@@ -34,9 +34,10 @@ async def create_note(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new note for a crop cycle with optional image upload"""
-    # Verify crop cycle exists
-    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.id == crop_cycle_id).first()
-    if not cycle:
+    # Verify crop cycle exists in crop_cycles table (where data actually is)
+    from app.models.crop_cycle import CropCycle
+    crop_cycle = db.query(CropCycle).filter(CropCycle.id == crop_cycle_id).first()
+    if not crop_cycle:
         raise HTTPException(status_code=404, detail="Crop cycle not found")
     
     image_path = None
@@ -69,7 +70,7 @@ async def create_note(
     note = CropCycleNote(
         related_type='crop_cycle',
         related_id=crop_cycle_id,
-        author_id=current_user.id,  # Use id instead of user_id
+        author_id=current_user.user_id,  # Use user_id (database column name)
         text=content,  # Use text instead of content
         media_url=image_path,  # Use media_url instead of image_path
         media_type='image' if image_path else None
@@ -101,9 +102,10 @@ def get_notes(
     current_user: User = Depends(get_current_user)
 ):
     """Get all notes for a crop cycle"""
-    # Verify crop cycle exists
-    cycle = db.query(CropCycleIncident).filter(CropCycleIncident.id == crop_cycle_id).first()
-    if not cycle:
+    # Verify crop cycle exists in crop_cycles table (where data actually is)
+    from app.models.crop_cycle import CropCycle
+    crop_cycle = db.query(CropCycle).filter(CropCycle.id == crop_cycle_id).first()
+    if not crop_cycle:
         raise HTTPException(status_code=404, detail="Crop cycle not found")
     
     # Fetch notes with user details using polymorphic fields

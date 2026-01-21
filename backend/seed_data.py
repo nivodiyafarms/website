@@ -25,27 +25,31 @@ def seed_database():
             return
         
         # Create Users
+        import uuid
         users = [
             User(
+                user_id=uuid.uuid4(),
                 name="Admin User",
                 phone="9876543210",
                 password=get_password_hash("admin123"),
-                role=UserRole.ADMIN,
-                language=UserLanguage.EN_IN
+                role=UserRole.ADMIN.value,  # Use .value to get string
+                language=UserLanguage.EN_IN.value if UserLanguage.EN_IN else None
             ),
             User(
+                user_id=uuid.uuid4(),
                 name="Rajesh Sharma",
                 phone="9876543211",
                 password=get_password_hash("supervisor123"),
-                role=UserRole.SUPERVISOR,
-                language=UserLanguage.HI_IN
+                role=UserRole.SUPERVISOR.value,  # Use .value to get string
+                language=UserLanguage.HI_IN.value if UserLanguage.HI_IN else None
             ),
             User(
+                user_id=uuid.uuid4(),
                 name="Amit Kumar",
                 phone="9876543212",
                 password=get_password_hash("worker123"),
-                role=UserRole.WORKER,
-                language=UserLanguage.HI_IN
+                role=UserRole.WORKER.value,  # Use .value to get string
+                language=UserLanguage.HI_IN.value if UserLanguage.HI_IN else None
             ),
         ]
         db.add_all(users)

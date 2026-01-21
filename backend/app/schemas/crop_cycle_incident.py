@@ -103,20 +103,22 @@ class TaskResourceResponse(TaskResourceBase):
 # ============ Task (Child Incident) Schemas ============
 
 class TaskBase(BaseModel):
-    task_type: TaskType  # Required - database constraint: type NOT NULL
-    short_description: Optional[str] = None  # Optional - database allows NULL
+    task_type: TaskType  # Required - database constraint: task_type NOT NULL
+    short_description: str  # Required - database constraint: short_description NOT NULL
     description: Optional[str] = None
-    assigned_to_id: Optional[UUID] = None  # Optional - Task model doesn't have this field
+    assigned_to_id: UUID  # Required - database constraint: assigned_to_id NOT NULL
     occurred_at: Optional[datetime] = None
     labor_count: Optional[int] = None
     labor_hours: Optional[float] = None
     outcome_observation: Optional[str] = None
     gps_lat: Optional[float] = None
     gps_lng: Optional[float] = None
+    status: Optional[TaskStatus] = None  # Will default to 'new' if not provided
+    total_cost: Optional[float] = 0.0  # Will be calculated from resources if not provided
 
 
 class TaskCreate(TaskBase):
-    crop_cycle_id: Optional[UUID] = None  # Optional - comes from URL path parameter
+    crop_cycle_id: Optional[UUID] = None  # Comes from URL path parameter, not request body
     resources: List[TaskResourceCreate] = []
 
 
@@ -139,24 +141,23 @@ class TaskUpdate(BaseModel):
 
 
 class TaskResponse(TaskBase):
-    task_id: UUID
-    task_no: Optional[str] = None  # Auto-generated ID (TA0001, TA0002, etc.)
-    crop_cycle_id: UUID
-    created_by_id: UUID
-    approved_by_id: Optional[UUID]
-    total_cost: float
-    severity: Optional[SeverityLevel]
-    status: TaskStatus
-    on_hold_reason: Optional[str]
-    resolution_notes: Optional[str]
-    attachments: Optional[str]
-    created_at: datetime
-    updated_at: datetime
-    closed_at: Optional[datetime]
-    is_voice_recorded: str
-    audio_file_path: Optional[str]
-    transcript: Optional[str]
-    resources: List[TaskResourceResponse] = []
+    task_id: UUID  # Database uses task_id as PK
+    crop_cycle_id: UUID  # Required - NOT NULL in database
+    created_by_id: UUID  # Required - NOT NULL in database
+    approved_by_id: Optional[UUID] = None
+    total_cost: float  # Required - NOT NULL in database
+    severity: Optional[str] = None  # VARCHAR(5) in database
+    status: TaskStatus  # Required - NOT NULL in database
+    on_hold_reason: Optional[str] = None
+    resolution_notes: Optional[str] = None
+    attachments: Optional[str] = None
+    created_at: datetime  # Required - NOT NULL in database
+    updated_at: datetime  # Required - NOT NULL in database
+    closed_at: Optional[datetime] = None
+    is_voice_recorded: str = "no"  # Required - NOT NULL in database, default "no"
+    audio_file_path: Optional[str] = None
+    transcript: Optional[str] = None
+    resources: List[TaskResourceResponse] = []  # Not stored in tasks table, from task_resources
     
     class Config:
         from_attributes = True

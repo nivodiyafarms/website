@@ -20,8 +20,8 @@ class Note(Base):
     related_type = Column(String(10), nullable=True)  # e.g., 'crop_cycle', 'task', 'work_order'
     related_id = Column(UUID(as_uuid=True), nullable=True)
     
-    # Author (FK to auth.users)
-    author_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.id"), nullable=True)
+    # Author (FK to users.user_id, not auth.users.id)
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
     
     # Content
     text = Column(Text, nullable=True)
@@ -34,7 +34,7 @@ class Note(Base):
     # Relationships
     # Note: Polymorphic relationships use foreign() annotation
     # These are viewonly relationships since there's no direct FK
-    # User relationship via author_id
+    # User relationship via author_id - references users.user_id
     user = relationship("User", foreign_keys=[author_id], viewonly=True)
     
     # Property aliases for backward compatibility

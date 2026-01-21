@@ -20,107 +20,42 @@ class UserLanguage(str, enum.Enum):
 
 class User(Base):
     """
-    User model - Points to auth.users table in Supabase
-    Note: Supabase auth.users has limited columns: id, email, encrypted_password, etc.
-    Custom fields (name, phone, role, language) are accessed via properties that may
-    read from user_metadata JSONB or a separate table. For queries, only use columns
-    that exist in auth.users.
+    User model - Matches the users table in database
+    Database uses user_id as primary key, not id
     """
     __tablename__ = "users"
-    __table_args__ = {'schema': 'auth'}  # Point to auth schema
     
-    # Primary Key - matches auth.users.id (UUID)
-    id = Column(UUID(as_uuid=True), primary_key=True)
+    # Primary Key - database uses user_id, not id
+    user_id = Column(UUID(as_uuid=True), primary_key=True)
     
-    # Note: We can't directly map auth.users columns that we don't have access to
-    # We'll use hybrid properties to query user_metadata JSONB
+    # User Information
+    name = Column(String(64), nullable=False)
+    phone = Column(String(15), nullable=False, unique=True)
+    password = Column(String(255), nullable=False)
+    role = Column(String(10), nullable=False)
+    language = Column(String(5), nullable=True)
     
     # Property aliases for backward compatibility
     @property
-    def user_id(self):
-        """Alias for id for backward compatibility"""
-        return self.id
-    
-    # Custom field properties - read from user_metadata JSONB
-    @hybrid_property
-    def name(self):
-        """Get name from user_metadata JSONB"""
-        try:
-            session = object_session(self)
-            if session:
-                result = session.execute(text("""
-                    SELECT raw_user_meta_data->>'name' as name
-                    FROM auth.users
-                    WHERE id = :user_id
-                """), {"user_id": str(self.id)})
-                row = result.fetchone()
-                if row and row.name:
-                    return row.name
-        except Exception:
-            pass
-        return "Unknown User"  # Default value instead of None
-    
-    @hybrid_property
-    def phone(self):
-        """Get phone from user_metadata JSONB"""
-        try:
-            session = object_session(self)
-            if session:
-                result = session.execute(text("""
-                    SELECT raw_user_meta_data->>'phone' as phone
-                    FROM auth.users
-                    WHERE id = :user_id
-                """), {"user_id": str(self.id)})
-                row = result.fetchone()
-                if row and row.phone:
-                    return row.phone
-        except Exception:
-            pass
-        return "0000000000"  # Default value instead of None
+    def id(self):
+        """Alias for user_id for backward compatibility"""
+        return self.user_id
     
     @property
-    def password(self):
-        """Get password - would need to access encrypted_password"""
-        return None
-    
-    @hybrid_property
-    def role(self):
-        """Get role from user_metadata JSONB or return default"""
-        try:
-            session = object_session(self)
-            if session:
-                result = session.execute(text("""
-                    SELECT raw_user_meta_data->>'role' as role
-                    FROM auth.users
-                    WHERE id = :user_id
-                """), {"user_id": str(self.id)})
-                row = result.fetchone()
-                if row and row.role:
-                    try:
-                        return UserRole(row.role)
-                    except ValueError:
-                        pass
-        except Exception:
-            pass
-        return UserRole.WORKER
-    
-    @hybrid_property
-    def language(self):
-        """Get language from user_metadata JSONB or return default"""
-        try:
-            session = object_session(self)
-            if session:
-                result = session.execute(text("""
-                    SELECT raw_user_meta_data->>'language' as language
-                    FROM auth.users
-                    WHERE id = :user_id
-                """), {"user_id": str(self.id)})
-                row = result.fetchone()
-                if row and row.language:
-                    try:
-                        return UserLanguage(row.language)
-                    except ValueError:
-                        pass
-        except Exception:
-            pass
-        return UserLanguage.EN_IN
+    def language_enum(self):
+        """Convert language string to UserLanguage enum"""
+        if not self.language:
+            return UserLanguage.EN_IN
+        
+        # Handle both enum names (EN_IN) and values (en-IN)
+        lang_str = str(self.language).upper()
+        if lang_str == "EN_IN" or lang_str == "EN-IN":
+            return UserLanguage.EN_IN
+        elif lang_str == "HI_IN" or lang_str == "HI-IN":
+            return UserLanguage.HI_IN
+        else:
+            # Try to match by value
+            try:
+                return UserLanguage(self.language)
+            except ValueError:
+                return UserLanguage.EN_IN

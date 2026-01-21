@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from app.database import engine, Base
 from app.api import auth, users, fields, crop_cycles, crops, materials, equipment, crop_cycle_incidents, crop_cycle_notes, chatbot, general_expenses
 import os
@@ -27,6 +29,45 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Global exception handler to ensure CORS headers on errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Ensure CORS headers are sent even on errors"""
+    import traceback
+    error_details = traceback.format_exc()
+    print(f"Unhandled exception: {exc}")
+    print(f"Error details: {error_details}")
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "message": f"Internal server error: {str(exc)}",
+            "data": None
+        },
+        headers={
+            "Access-Control-Allow-Origin": "http://localhost:3000",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
+# Validation error handler with CORS
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors with CORS headers"""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "success": False,
+            "message": "Validation error",
+            "data": exc.errors()
+        },
+        headers={
+            "Access-Control-Allow-Origin": "http://localhost:3000",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
 
 # Mount static files for uploads (images, audio, etc.)
 if os.path.exists("uploads"):

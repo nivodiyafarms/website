@@ -338,8 +338,14 @@ export function transformTaskRequest(data) {
   const currentUser = getCurrentUser();
   const transformed = {};
 
-  // Field name mappings
-  // CRITICAL: task_type is required by database (type NOT NULL)
+  // Helper function to check if string is a valid UUID
+  const isValidUUID = (str) => {
+    if (!str || typeof str !== 'string') return false;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
+
+  // CRITICAL: task_type is required by database (task_type NOT NULL)
   // Map category + sub_category → task_type (TaskType enum)
   if (data.category !== undefined || data.sub_category !== undefined) {
     transformed.task_type = mapCategoryToTaskType(data.category, data.sub_category);
@@ -354,12 +360,17 @@ export function transformTaskRequest(data) {
   
   console.log('🔄 Task transformer - task_type set to:', transformed.task_type);
   
-  // Map sub_category → sub_type
-  if (data.sub_category !== undefined) transformed.sub_type = data.sub_category;
-  if (data.short_description !== undefined) transformed.short_description = data.short_description;
+  // CRITICAL: short_description is required by database (NOT NULL)
+  if (data.short_description !== undefined && data.short_description) {
+    transformed.short_description = data.short_description;
+  } else {
+    // Provide default if missing
+    transformed.short_description = 'Task';
+  }
+  
   if (data.description !== undefined) transformed.description = data.description;
   
-  // Map status (Hindi) → status (TaskStatus enum)
+  // CRITICAL: status is required by database (NOT NULL) - default to 'new'
   if (data.status !== undefined) {
     // Handle both Hindi and English status values
     const statusValue = data.status;
@@ -371,17 +382,40 @@ export function transformTaskRequest(data) {
     } else {
       transformed.status = statusValue;
     }
+  } else {
+    // Default to 'new' if not provided
+    transformed.status = 'new';
   }
+  
+  // CRITICAL: assigned_to_id is required by database (NOT NULL)
+  if (data.assigned_to_id !== undefined && isValidUUID(data.assigned_to_id)) {
+    transformed.assigned_to_id = data.assigned_to_id;
+  } else if (data.opened_by !== undefined && isValidUUID(data.opened_by)) {
+    transformed.assigned_to_id = data.opened_by;
+  } else if (currentUser?.id && isValidUUID(currentUser.id)) {
+    transformed.assigned_to_id = currentUser.id;
+  } else if (currentUser?.user_id && isValidUUID(currentUser.user_id)) {
+    transformed.assigned_to_id = currentUser.user_id;
+  } else {
+    // Fallback - use current user or raise error
+    console.warn('⚠️ No valid assigned_to_id - using current user as fallback');
+    if (currentUser?.id) {
+      transformed.assigned_to_id = currentUser.id;
+    } else if (currentUser?.user_id) {
+      transformed.assigned_to_id = currentUser.user_id;
+    }
+  }
+  
   // Map opened_date → occurred_at (convert to ISO datetime)
   if (data.opened_date !== undefined) transformed.occurred_at = formatDate(data.opened_date);
-  
-  // Map expected_resolution_date → resolved_at if needed
-  if (data.expected_resolution_date !== undefined) transformed.resolved_at = formatDate(data.expected_resolution_date);
-  
-  // Handle existing fields
-  if (data.sub_type !== undefined) transformed.sub_type = data.sub_type;
   if (data.occurred_at !== undefined) transformed.occurred_at = formatDate(data.occurred_at);
-  if (data.resolved_at !== undefined) transformed.resolved_at = formatDate(data.resolved_at);
+  
+  // Additional fields that exist in database
+  if (data.labor_count !== undefined) transformed.labor_count = data.labor_count;
+  if (data.labor_hours !== undefined) transformed.labor_hours = data.labor_hours;
+  if (data.outcome_observation !== undefined) transformed.outcome_observation = data.outcome_observation;
+  if (data.gps_lat !== undefined) transformed.gps_lat = data.gps_lat;
+  if (data.gps_lng !== undefined) transformed.gps_lng = data.gps_lng;
   
   // Map resolution_notes → description (append to description)
   if (data.resolution_notes !== undefined && data.resolution_notes) {
@@ -395,60 +429,28 @@ export function transformTaskRequest(data) {
   // Handle update_notes for task updates
   if (data.update_notes !== undefined) transformed.update_notes = data.update_notes;
 
-  // Calculate cost from resources array
+  // Calculate total_cost from resources array (database uses total_cost, not cost)
   if (data.resources && Array.isArray(data.resources)) {
-    transformed.cost = calculateTotalCost(data.resources);
-    // Keep resources array for backend to process (backend calculates cost from it)
+    transformed.total_cost = calculateTotalCost(data.resources);
+    // Keep resources array for backend to process
     transformed.resources = data.resources;
+  } else if (data.total_cost !== undefined) {
+    transformed.total_cost = data.total_cost;
   } else if (data.cost !== undefined) {
-    transformed.cost = data.cost;
+    transformed.total_cost = data.cost;
   } else {
-    transformed.cost = 0;
+    transformed.total_cost = 0;
   }
 
-  // Handle assigned_to_id - optional, Task model doesn't have this field
-  // Only set if it's a valid UUID (not a string name like "sad")
-  // Helper function to check if string is a valid UUID
-  const isValidUUID = (str) => {
-    if (!str || typeof str !== 'string') return false;
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(str);
-  };
-  
-  if (data.assigned_to_id !== undefined && isValidUUID(data.assigned_to_id)) {
-    transformed.assigned_to_id = data.assigned_to_id;
-  } else if (data.opened_by !== undefined && isValidUUID(data.opened_by)) {
-    // Only use opened_by if it's a valid UUID
-    transformed.assigned_to_id = data.opened_by;
-  } else if (currentUser?.id && isValidUUID(currentUser.id)) {
-    transformed.assigned_to_id = currentUser.id;
-  } else if (currentUser?.user_id && isValidUUID(currentUser.user_id)) {
-    transformed.assigned_to_id = currentUser.user_id;
-  }
-  // If none of the above are valid UUIDs, don't set assigned_to_id (leave it undefined)
-
-  // Set created_by from current user (backend will override with current_user.id)
-  // But include it in case backend needs it
-  if (data.created_by !== undefined) {
-    transformed.created_by = data.created_by;
-  } else if (currentUser?.id) {
-    transformed.created_by = currentUser.id;
-  } else if (currentUser?.user_id) {
-    transformed.created_by = currentUser.user_id;
-  }
-
-  // crop_cycle_id comes from URL path parameter, not request body
-  // Don't include it - backend gets it from URL: /crop-cycle-incidents/{crop_cycle_id}/tasks
-
-  // Remove fields not in backend schema
-  // hold_reason, cancel_reason, resolution_comments, observation are removed
-  // resources is kept for backend to process
+  // crop_cycle_id comes from URL path parameter, NOT request body
+  // DO NOT include it in transformed data - backend gets it from URL
 
   console.log('🔄 Task transformer - Output data:', transformed);
   console.log('🔄 Task transformer - Required fields check:', {
     task_type: !!transformed.task_type,
-    short_description: transformed.short_description !== undefined,
-    crop_cycle_id: !!transformed.crop_cycle_id
+    short_description: !!transformed.short_description,
+    assigned_to_id: !!transformed.assigned_to_id,
+    status: !!transformed.status
   });
 
   return transformed;
@@ -463,26 +465,37 @@ export function transformWorkOrderRequest(data) {
   const currentUser = getCurrentUser();
   const transformed = {};
 
-  // Field name mappings
-  // Map shortDesc → title (required field)
-  if (data.shortDesc !== undefined) transformed.title = data.shortDesc;
+  // CRITICAL: title is required by database (NOT NULL)
+  // Map shortDesc → title
+  if (data.shortDesc !== undefined && data.shortDesc) {
+    transformed.title = data.shortDesc;
+  } else if (data.title !== undefined && data.title) {
+    transformed.title = data.title;
+  } else {
+    // Provide default if missing
+    transformed.title = 'Work Order';
+  }
   
   // Map description → description
   if (data.description !== undefined) {
     transformed.description = data.description;
   }
   
-  // Map instructions → remove (not in database, can be merged into description)
-  // If instructions exist and description is empty, use instructions as description
+  // Map instructions → description (if description is empty)
+  // Instructions are not stored in database, merge into description
   if (data.instructions !== undefined && data.instructions && !transformed.description) {
     transformed.description = data.instructions;
   }
   
-  // Map assigned_to_id → assigned_to_id
-  if (data.assigned_to_id !== undefined) transformed.assigned_to_id = data.assigned_to_id;
+  // Map assigned_to_id → assigned_to_id (maps to assigned_to in database)
+  if (data.assigned_to_id !== undefined) {
+    transformed.assigned_to_id = data.assigned_to_id;
+  }
   
-  // Map due_date → due_date (convert to ISO datetime)
-  if (data.due_date !== undefined) transformed.due_date = formatDate(data.due_date);
+  // Map due_date → due_date (convert to ISO datetime, then backend converts to DATE)
+  if (data.due_date !== undefined) {
+    transformed.due_date = formatDate(data.due_date);
+  }
   
   // Map status → status (WorkOrderStatus enum)
   if (data.status !== undefined) {
@@ -490,33 +503,23 @@ export function transformWorkOrderRequest(data) {
   }
   
   // Handle closed_at if provided
-  if (data.actualResolvedDate !== undefined) transformed.closed_at = formatDate(data.actualResolvedDate);
-
-  // Handle English field names (for updates)
-  if (data.title !== undefined) transformed.title = data.title;
-  if (data.closed_at !== undefined) transformed.closed_at = formatDate(data.closed_at);
-
-  // Set created_by from current user
-  if (data.created_by !== undefined) {
-    transformed.created_by = data.created_by;
-  } else if (currentUser?.id) {
-    transformed.created_by = currentUser.id;
-  } else if (currentUser?.user_id) {
-    transformed.created_by = currentUser.user_id;
+  if (data.actualResolvedDate !== undefined) {
+    transformed.closed_at = formatDate(data.actualResolvedDate);
+  }
+  if (data.closed_at !== undefined) {
+    transformed.closed_at = formatDate(data.closed_at);
   }
 
-  // Copy crop_cycle_id if present
-  if (data.crop_cycle_id !== undefined) transformed.crop_cycle_id = data.crop_cycle_id;
-  
   // Copy task_id if present (for linking work order to task)
-  if (data.task_id !== undefined) transformed.task_id = data.task_id;
-
-  // Ensure title is always provided (required field)
-  if (!transformed.title && data.shortDesc) {
-    transformed.title = data.shortDesc;
+  // Database uses task_id to link to tasks.task_id
+  if (data.task_id !== undefined) {
+    transformed.task_id = data.task_id;
   }
-  if (!transformed.title && data.title) {
-    transformed.title = data.title;
+
+  // crop_cycle_id is for frontend convenience (from URL path)
+  // Backend uses it to find/create task, then links work order via task_id
+  if (data.crop_cycle_id !== undefined) {
+    transformed.crop_cycle_id = data.crop_cycle_id;
   }
 
   // Remove fields not in backend schema
@@ -562,19 +565,56 @@ export function transformTaskResponse(data) {
 
   const transformed = { ...data };
 
-  // Map backend field names to frontend expected names
-  if (data.id !== undefined) transformed.task_id = data.id;
-  if (data.type !== undefined) transformed.task_type = data.type; // For frontend compatibility
-  if (data.cost !== undefined) transformed.total_cost = data.cost; // For frontend compatibility
+  // Database uses task_id as PK - backend response should already have task_id
+  // Map id to task_id if backend returns id instead
+  if (data.task_id !== undefined) {
+    transformed.task_id = data.task_id;
+  } else if (data.id !== undefined) {
+    transformed.task_id = data.id;
+  }
   
-  // Map created_by to created_by_id if needed
-  if (data.created_by !== undefined && !data.created_by_id) {
+  // Database uses task_type, not type
+  if (data.task_type !== undefined) {
+    transformed.task_type = data.task_type;
+  } else if (data.type !== undefined) {
+    transformed.task_type = data.type;
+  }
+  
+  // Database uses total_cost, not cost
+  if (data.total_cost !== undefined) {
+    transformed.total_cost = data.total_cost;
+  } else if (data.cost !== undefined) {
+    transformed.total_cost = data.cost;
+  }
+  
+  // Database uses assigned_to_id
+  if (data.assigned_to_id !== undefined) {
+    transformed.assigned_to_id = data.assigned_to_id;
+  } else if (data.assigned_to !== undefined) {
+    transformed.assigned_to_id = data.assigned_to;
+  }
+  
+  // Database uses created_by_id
+  if (data.created_by_id !== undefined) {
+    transformed.created_by_id = data.created_by_id;
+  } else if (data.created_by !== undefined) {
     transformed.created_by_id = data.created_by;
   }
   
-  // Map approved_by to approved_by_id if needed
-  if (data.approved_by !== undefined && !data.approved_by_id) {
+  // Database uses approved_by_id
+  if (data.approved_by_id !== undefined) {
+    transformed.approved_by_id = data.approved_by_id;
+  } else if (data.approved_by !== undefined) {
     transformed.approved_by_id = data.approved_by;
+  }
+  
+  // Database uses closed_at, not resolved_at
+  if (data.closed_at !== undefined) {
+    transformed.closed_at = data.closed_at;
+    transformed.resolved_at = data.closed_at; // For backward compatibility
+  } else if (data.resolved_at !== undefined) {
+    transformed.closed_at = data.resolved_at;
+    transformed.resolved_at = data.resolved_at;
   }
 
   // Keep original fields

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional
+from uuid import UUID
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
@@ -15,10 +16,28 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verify password against hash.
+    Handles both bcrypt hashes and plain text (for migration purposes).
+    """
+    if not plain_password or not hashed_password:
+        return False
+    
     # Truncate password to 72 bytes for bcrypt compatibility
     if isinstance(plain_password, str):
         plain_password = plain_password.encode('utf-8')[:72].decode('utf-8', errors='ignore')
-    return pwd_context.verify(plain_password, hashed_password)
+    
+    try:
+        # Try to verify as bcrypt hash
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception as e:
+        # If hash verification fails, check if it's plain text (for migration)
+        # This allows existing plain text passwords to work temporarily
+        if hashed_password == plain_password:
+            print(f"Warning: Plain text password detected for user. Please update to hashed password.")
+            return True
+        print(f"Password verification error: {e}")
+        return False
 
 
 def get_password_hash(password: str) -> str:
@@ -41,42 +60,39 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 def authenticate_user(db: Session, phone: str, password: str):
     """
-    Authenticate user by phone and password.
-    
-    TEMPORARY IMPLEMENTATION FOR TESTING:
-    This bypasses actual authentication and returns the first user found.
-    WARNING: This is NOT secure and should be replaced with proper authentication!
-    
-    TODO: Implement proper authentication based on your setup:
-    - Option 1: Use email instead of phone
-    - Option 2: Query user_metadata JSONB for phone
-    - Option 3: Use a separate public.users table
+    Authenticate user by phone and password from users table.
     """
-    # TEMPORARY: Get first user from database for testing
-    # WARNING: Remove this in production!
     try:
-        user = db.query(User).first()
-        if user:
-            return user
-        return False
+        # Query user by phone from users table
+        user = db.query(User).filter(User.phone == phone).first()
+        if not user:
+            print(f"Authentication failed: User with phone {phone} not found")
+            return False
+        
+        # Debug: Check password format (first 20 chars only for security)
+        password_preview = user.password[:20] if user.password else "None"
+        print(f"Debug: User found. Password hash preview: {password_preview}...")
+        
+        # Verify password using bcrypt (or plain text fallback)
+        password_valid = verify_password(password, user.password)
+        if not password_valid:
+            print(f"Authentication failed: Invalid password for user {phone}")
+            return False
+        
+        # If password was plain text, update it to hashed (migration)
+        if user.password == password:
+            print(f"Updating plain text password to hashed for user {phone}")
+            user.password = get_password_hash(password)
+            db.commit()
+            print(f"Password updated to hashed format")
+        
+        print(f"Authentication successful: User {user.name} ({user.phone})")
+        return user
     except Exception as e:
+        import traceback
         print(f"Authentication error: {e}")
+        print(traceback.format_exc())
         return False
-    
-    # TODO: Proper implementation example:
-    # from sqlalchemy import text
-    # result = db.execute(text("""
-    #     SELECT id, encrypted_password, raw_user_meta_data
-    #     FROM auth.users
-    #     WHERE raw_user_meta_data->>'phone' = :phone
-    # """), {"phone": phone})
-    # user_data = result.fetchone()
-    # if not user_data:
-    #     return False
-    # if not verify_password(password, user_data.encrypted_password):
-    #     return False
-    # user = db.query(User).filter(User.id == user_data.id).first()
-    # return user
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -94,7 +110,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except JWTError:
         raise credentials_exception
     
-    user = db.query(User).filter(User.id == token_data.user_id).first()
+    # Database uses user_id as PK, not id
+    user = db.query(User).filter(User.user_id == UUID(token_data.user_id)).first()
     if user is None:
         raise credentials_exception
     return user

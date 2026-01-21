@@ -28,16 +28,16 @@ class WorkOrder(Base):
     # Work Order Number
     work_order_no = Column(Text, nullable=True, unique=True)
     
-    # Parent Task
-    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True)  # Changed from crop_cycle_id
+    # Parent Task - references tasks.task_id, not tasks.id
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.task_id"), nullable=True)
     
     # Work Order Details
-    title = Column(Text, nullable=False)  # Changed from String(200)
-    description = Column(Text, nullable=True)  # Changed from NOT NULL
+    title = Column(Text, nullable=False)  # NOT NULL in database
+    description = Column(Text, nullable=True)
     
-    # Assignment (FKs to auth.users)
-    assigned_to = Column(UUID(as_uuid=True), ForeignKey("auth.users.id"), nullable=True)  # Changed from assigned_to_id
-    created_by = Column(UUID(as_uuid=True), ForeignKey("auth.users.id"), nullable=True)  # Changed from created_by_id
+    # Assignment (FKs to users.user_id, not users.id)
+    assigned_to = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
     
     # Status
     status = Column(String(11), nullable=True)  # Changed from NOT NULL, enum type
@@ -88,45 +88,3 @@ class WorkOrder(Base):
         return None
 
 
-class WorkOrderResource(Base):
-    """
-    Resources used in a work order (labor, equipment, materials, etc.)
-    Matches the work_order_resources table schema exactly
-    """
-    __tablename__ = "work_order_resources"
-
-    # Primary Key
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    # Parent Work Order
-    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True)
-    
-    # Resource Information
-    resource_type = Column(String(8), nullable=True)  # Changed from enum
-    name = Column(Text, nullable=True)  # Changed from NOT NULL
-    qty = Column(Numeric, nullable=True)  # Changed from quantity, Float to Numeric
-    unit = Column(Text, nullable=True)  # Changed from NOT NULL
-    rate = Column(Numeric, nullable=True)  # Changed from cost_per_unit, Float to Numeric
-    cost = Column(Numeric, nullable=True)  # Changed from total_cost, Float to Numeric
-    
-    # Timestamps
-    created_at = Column(DateTime, nullable=True, default=datetime.utcnow)  # Changed from NOT NULL
-    
-    # Relationships
-    work_order = relationship("WorkOrder", back_populates="resources", foreign_keys=[work_order_id])
-    
-    # Property aliases for backward compatibility
-    @property
-    def quantity(self):
-        """Alias for qty for backward compatibility"""
-        return self.qty
-    
-    @property
-    def cost_per_unit(self):
-        """Alias for rate for backward compatibility"""
-        return self.rate
-    
-    @property
-    def total_cost(self):
-        """Alias for cost for backward compatibility"""
-        return self.cost

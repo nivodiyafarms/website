@@ -10,7 +10,8 @@ from datetime import datetime
 
 from app.models.crop_cycle import CropCycle, CropStage, CropCycleStatus
 from app.models.task import Task, TaskStatus
-from app.models.work_order import WorkOrder, WorkOrderStatus, WorkOrderResource
+from app.models.work_order import WorkOrder, WorkOrderStatus
+from app.models.work_order_resource import WorkOrderResource
 from app.models.user import User
 
 
