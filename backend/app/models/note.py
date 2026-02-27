@@ -1,3 +1,4 @@
+# backend/app/models/note.py
 from sqlalchemy import (
     Column,
     String,
