@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, Enum as SQLEnum, text
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+# backend/app/models/user.py
+from sqlalchemy import Column, String, text
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM as PGEnum
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import object_session
 import uuid
@@ -8,14 +9,14 @@ from app.database import Base
 
 
 class UserRole(str, enum.Enum):
-    ADMIN = "ADMIN"
-    SUPERVISOR = "SUPERVISOR"
-    WORKER = "WORKER"
+    ADMIN = "admin"
+    SUPERVISOR = "supervisor"
+    WORKER = "worker"
 
 
 class UserLanguage(str, enum.Enum):
-    EN_IN = "en-IN"
-    HI_IN = "hi-IN"
+    EN_IN = "en_in"
+    HI_IN = "hi_in"
 
 
 class User(Base):
@@ -32,30 +33,11 @@ class User(Base):
     name = Column(String(64), nullable=False)
     phone = Column(String(15), nullable=False, unique=True)
     password = Column(String(255), nullable=False)
-    role = Column(String(10), nullable=False)
-    language = Column(String(5), nullable=True)
+    role = Column(PGEnum(UserRole, name="userrole", create_type=False, values_callable=lambda enum_cls: [e.value for e in enum_cls]), nullable=False)
+    language = Column(PGEnum(UserLanguage, name="userlanguage", create_type=False, values_callable=lambda enum_cls: [e.value for e in enum_cls]), nullable=True)
     
     # Property aliases for backward compatibility
     @property
     def id(self):
         """Alias for user_id for backward compatibility"""
         return self.user_id
-    
-    @property
-    def language_enum(self):
-        """Convert language string to UserLanguage enum"""
-        if not self.language:
-            return UserLanguage.EN_IN
-        
-        # Handle both enum names (EN_IN) and values (en-IN)
-        lang_str = str(self.language).upper()
-        if lang_str == "EN_IN" or lang_str == "EN-IN":
-            return UserLanguage.EN_IN
-        elif lang_str == "HI_IN" or lang_str == "HI-IN":
-            return UserLanguage.HI_IN
-        else:
-            # Try to match by value
-            try:
-                return UserLanguage(self.language)
-            except ValueError:
-                return UserLanguage.EN_IN

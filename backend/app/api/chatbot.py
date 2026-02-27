@@ -83,15 +83,15 @@ def parse_work_order_input(
         # Safe fallback so UI doesn't break completely
         return WorkOrderParseResponse(
             parsed_data={
-                "title": None,
+                "short_description": None,
                 "description": None,
                 "instructions": None,
                 "assigned_to_id": None,
                 "due_date": None,
-                "missing_fields": ["title", "description", "assigned_to_id", "due_date"],
+                "missing_fields": ["short_description", "description", "assigned_to_id", "due_date"],
                 "is_complete": False
             },
-            follow_up_question="Please provide title, description, assignee and due date.",
+            follow_up_question="Please provide short description, description, assignee and due date.",
             is_complete=False
         )
 
@@ -150,16 +150,17 @@ def parse_task_input(
     except Exception as e:
         return TaskParseResponse(
             parsed_data={
-                "task_type": None,
+                "category": None,
+                "subcategory": None,
                 "short_description": None,
                 "description": None,
                 "assigned_to_id": None,
                 "occurred_at": None,
                 "resources": [],
-                "missing_fields": ["task_type", "short_description", "assigned_to_id", "occurred_at"],
+                "missing_fields": ["category", "short_description", "assigned_to_id", "occurred_at"],
                 "is_complete": False
             },
-            follow_up_question="Please provide task type, a short description, assignee, and when it occurred.",
+            follow_up_question="Please provide task category, a short description, assignee, and when it occurred.",
             is_complete=False
         )
 
@@ -261,7 +262,7 @@ def create_work_order_from_chatbot(
         # Create work order
         work_order_data = request.form_data
         work_order = WorkOrder(
-            title=work_order_data["title"],
+            short_description=work_order_data["short_description"],
             description=work_order_data.get("description"),
             assigned_to=work_order_data.get("assigned_to_id"),  # Use assigned_to instead of assigned_to_id
             due_date=work_order_data.get("due_date"),
@@ -304,23 +305,24 @@ def create_task_from_chatbot(
         
         # Create task
         task_data = request.form_data
-        # Map task_type to type
-        task_type = task_data.get("task_type", "OTHER")
-        if isinstance(task_type, str):
-            task_type = task_type.lower() if task_type else "other"
+        # Use category and subcategory instead of task_type
+        category = task_data.get("category", "other")
+        subcategory = task_data.get("subcategory", "other")
+        if isinstance(category, str):
+            category = category.lower() if category else "other"
+        if isinstance(subcategory, str):
+            subcategory = subcategory.lower() if subcategory else "other"
         
         task = Task(
             crop_cycle_id=request.crop_cycle_id,
-            type=task_type,  # Use 'type' instead of 'task_type'
+            category=category,  # Use category instead of task_type
+            subcategory=subcategory,  # Use subcategory instead of task_type
             short_description=task_data.get("short_description", ""),
             description=task_data.get("description"),
-            occurred_at=task_data.get("occurred_at"),
-            created_by=current_user.id  # Use 'created_by' instead of 'created_by_id'
+            assigned_to_id=task_data.get("assigned_to_id", current_user.user_id),  # Required field
+            created_by_id=current_user.user_id,  # Use created_by_id (Task model field)
+            total_expense=sum(r.get("total_cost", 0) for r in task_data.get("resources", []))  # Calculate total_expense directly
         )
-        
-        # Calculate total cost from resources if provided
-        total_cost = sum(r.get("total_cost", 0) for r in task_data.get("resources", []))
-        task.cost = total_cost if total_cost > 0 else 0  # Use 'cost' instead of 'total_cost'
         
         db.add(task)
         db.flush()
@@ -334,7 +336,7 @@ def create_task_from_chatbot(
         
         return TaskCreateResponse(
             success=True,
-            task_id=task.id,  # Use id instead of task_id
+            task_id=task.task_id,  # Use task_id (primary key)
             message="Task created successfully"
         )
         

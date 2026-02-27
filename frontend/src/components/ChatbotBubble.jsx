@@ -10,7 +10,7 @@ const ChatbotBubble = () => {
       {/* Floating Bubble Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg transition-all duration-300 flex items-center justify-center ${
+        className={`fixed right-6 bottom-24 z-50 w-14 h-14 rounded-full shadow-lg transition-all duration-200 flex items-center justify-center ${
           isOpen
             ? 'bg-red-500 hover:bg-red-600'
             : 'bg-primary-600 hover:bg-primary-700'

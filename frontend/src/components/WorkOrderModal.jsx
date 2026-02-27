@@ -4,6 +4,16 @@ import ChatbotModal from './ChatbotModal';
 import VoiceRecorder from './VoiceRecorder';
 import { transformWorkOrderRequest } from '../utils/apiTransformers';
 
+const API_STATUS_TO_MODAL = {
+  open: 'New',
+  in_progress: 'In Progress',
+  on_hold: 'On Hold',
+  completed: 'Resolved',
+  closed: 'Closed',
+  cancelled: 'Cancelled',
+  partial: 'In Progress',
+};
+
 const WorkOrderModal = ({
   isOpen,
   onClose,
@@ -17,11 +27,11 @@ const WorkOrderModal = ({
 
   const [formData, setFormData] = useState({
     workOrderId: '',
-    shortDesc: '',
+    short_description: '',
     description: '',
     instructions: '',
     opened_by: '',
-    assigned_to_id: '',
+    assigned_to: '',
     status: 'current',
     holdReason: '',
     expectedDate: '',
@@ -36,14 +46,16 @@ const WorkOrderModal = ({
   /* ================= LOAD EDIT DATA ================= */
   useEffect(() => {
     if (editing) {
+      const apiStatus = (editing.status || '').toLowerCase();
+      const displayStatus = API_STATUS_TO_MODAL[apiStatus] || editing.status || 'current';
       setFormData({
-        workOrderId: editing.workOrderId || '',
-        shortDesc: editing.shortDesc || '',
+        workOrderId: editing.work_order_id || editing.workOrderId || '',
+        short_description: editing.short_description || editing.shortDesc || '',
         description: editing.description || '',
         instructions: editing.instructions || '',
         opened_by: editing.opened_by || '',
-        assigned_to_id: editing.assigned_to_id || '',
-        status: editing.status || 'current',
+        assigned_to: editing.assigned_to || editing.assigned_to_id || '',
+        status: displayStatus,
         holdReason: editing.holdReason || '',
         expectedDate: editing.expectedDate || '',
         actualResolvedDate: editing.actualResolvedDate || '',
@@ -51,10 +63,10 @@ const WorkOrderModal = ({
         observation: editing.observation || '',
         comments: editing.comments || '',
         attachments: editing.attachments || [],
-        due_date: editing.due_date ? editing.due_date.split('T')[0] : '',
+        due_date: editing.due_date ? String(editing.due_date).split('T')[0] : '',
       });
 
-      if (editing.status === 'Resolved') {
+      if (displayStatus === 'Resolved' || displayStatus === 'Closed') {
         setActiveTab('resolution');
       }
     }
@@ -73,7 +85,7 @@ const WorkOrderModal = ({
             : prev.actualResolvedDate,
       }));
 
-      setActiveTab(value === 'Resolved' ? 'resolution' : 'notes');
+      if (value === 'Resolved' || value === 'Closed') setActiveTab('resolution');
       return;
     }
 
@@ -93,7 +105,7 @@ const WorkOrderModal = ({
         `http://localhost:8000/crop-cycle-incidents/${cropCycleId}/tasks/voice/upload`,
         {
           method: 'POST',
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
           body: fd,
         }
       );
@@ -113,15 +125,14 @@ const WorkOrderModal = ({
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // CRITICAL: Only title (shortDesc) is required by database, not description
-    if (!formData.shortDesc || !formData.shortDesc.trim()) {
+    // CRITICAL: Only short_description is required by database, not description
+    if (!formData.short_description || !formData.short_description.trim()) {
       alert('संक्षिप्त विवरण (Short Description) आवश्यक है');
       return;
     }
 
     // Transform form data to match backend schema
     const transformedData = transformWorkOrderRequest({
-      crop_cycle_id: cropCycleId,
       ...formData,
       due_date: formData.due_date || null,
     });
@@ -184,8 +195,8 @@ const WorkOrderModal = ({
             <label className="font-medium">संक्षिप्त विवरण *</label>
             <input
               className="w-full border p-2 rounded-xl"
-              value={formData.shortDesc}
-              onChange={(e) => handleChange('shortDesc', e.target.value)}
+              value={formData.short_description}
+              onChange={(e) => handleChange('short_description', e.target.value)}
               required
             />
           </div>
@@ -208,32 +219,14 @@ const WorkOrderModal = ({
             />
           </div>
 
-          {/* INSTRUCTIONS */}
-          <div className="relative">
-            <label className="font-medium">सौंपा गया (नाम)</label>
-            <textarea
-              rows={2}
-              className="w-full border rounded-xl p-2 pr-12"
-              value={formData.instructions}
-              onChange={(e) => handleChange('instructions', e.target.value)}
-            />
-            <VoiceRecorder
-              onRecordingComplete={(blob) =>
-                handleVoiceRecordingComplete(blob, 'instructions')
-              }
-              customButton
-              buttonClassName="absolute top-2 right-2"
-            />
-          </div>
-
           {/* ASSIGNED + DUE DATE */}
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <label className="font-medium">को सौंपना *</label>
               <select
                 className="w-full border p-2 rounded-xl"
-                value={formData.assigned_to_id}
-                onChange={(e) => handleChange('assigned_to_id', e.target.value)}
+                value={formData.assigned_to}
+                onChange={(e) => handleChange('assigned_to', e.target.value)}
                 required
               >
                 <option value="">कार्यकर्ता चुनें</option>
@@ -285,72 +278,43 @@ const WorkOrderModal = ({
             )}
           </div>
 
-          {/* ================= TABS ================= */}
-          <div className="flex gap-8 border-t pt-4">
-            <button
-              type="button"
-              onClick={() => setActiveTab('notes')}
-              className={`pb-2 ${
-                activeTab === 'notes'
-                  ? 'border-b-2 border-green-600 text-green-600 font-semibold'
-                  : 'text-gray-500'
-              }`}
-            >
-              Notes
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('resolution')}
-              className={`pb-2 ${
-                activeTab === 'resolution'
-                  ? 'border-b-2 border-green-600 text-green-600 font-semibold'
-                  : 'text-gray-500'
-              }`}
-            >
-              Resolution Information
-            </button>
-          </div>
-
-          {/* NOTES */}
-          {activeTab === 'notes' && (
-            <textarea
-              rows={3}
-              className="w-full border rounded-xl p-2"
-              placeholder="टिप्पणियाँ"
-              value={formData.comments}
-              onChange={(e) => handleChange('comments', e.target.value)}
-            />
-          )}
-
-          {/* RESOLUTION */}
-          {activeTab === 'resolution' && (
-            <div className="bg-gray-50 p-4 rounded-xl space-y-3">
-              <label className="font-medium">वास्तविक समाधान तिथि</label>
-              <input
-                type="date"
-                className="w-full border p-2 rounded-xl"
-                value={formData.actualResolvedDate}
-                onChange={(e) =>
-                  handleChange('actualResolvedDate', e.target.value)
-                }
-              />
-
-              <textarea
-                className="w-full border rounded-xl p-2"
-                placeholder="समाधान टिप्पणियाँ"
-                value={formData.resolutionComments}
-                onChange={(e) =>
-                  handleChange('resolutionComments', e.target.value)
-                }
-              />
-
-              <textarea
-                className="w-full border rounded-xl p-2"
-                placeholder="निरीक्षण टिप्पणी"
-                value={formData.observation}
-                onChange={(e) => handleChange('observation', e.target.value)}
-              />
+          {/* RESOLUTION - inline when edit mode and status is Closed or Resolved (same as task/crop cycle) */}
+          {editing && (formData.status === 'Closed' || formData.status === 'Resolved') && (
+            <div className="bg-green-50 border border-green-200 p-4 rounded-xl space-y-3 mt-4">
+              <h3 className="font-semibold text-green-800">समाधान विवरण</h3>
+              <div>
+                <label className="font-medium text-gray-700 block mb-1">वास्तविक समाधान तिथि</label>
+                <input
+                  type="date"
+                  className="w-full border p-2 rounded-xl"
+                  value={formData.actualResolvedDate}
+                  onChange={(e) =>
+                    handleChange('actualResolvedDate', e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="font-medium text-gray-700 block mb-1">समाधान टिप्पणियाँ</label>
+                <textarea
+                  className="w-full border rounded-xl p-2"
+                  placeholder="समाधान टिप्पणियाँ"
+                  value={formData.resolutionComments}
+                  onChange={(e) =>
+                    handleChange('resolutionComments', e.target.value)
+                  }
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="font-medium text-gray-700 block mb-1">निरीक्षण टिप्पणी</label>
+                <textarea
+                  className="w-full border rounded-xl p-2"
+                  placeholder="निरीक्षण टिप्पणी"
+                  value={formData.observation}
+                  onChange={(e) => handleChange('observation', e.target.value)}
+                  rows={3}
+                />
+              </div>
             </div>
           )}
 

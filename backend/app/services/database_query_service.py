@@ -78,7 +78,7 @@ class DatabaseQueryService:
         crop_cycle_id: Optional[UUID] = None,
         incident_no: Optional[str] = None,
         task_no: Optional[str] = None,
-        task_type: Optional[str] = None,
+        category: Optional[str] = None,
         status: Optional[str] = None,
         limit: int = 50
     ) -> List[Dict[str, Any]]:
@@ -101,9 +101,11 @@ class DatabaseQueryService:
                 return []  # No cycle found, return empty
         
         if task_no:
-            query = query.filter(Task.task_no.ilike(f"%{task_no}%"))
-        if task_type:
-            query = query.filter(Task.type.ilike(f"%{task_type}%"))
+            # Note: Task model doesn't have task_no field, skipping this filter
+            # If task_no is a UUID, use: query = query.filter(Task.task_id == UUID(task_no))
+            pass
+        if category:
+            query = query.filter(Task.category.ilike(f"%{category}%"))
         if status:
             query = query.filter(Task.status == status.lower())
         
@@ -112,18 +114,18 @@ class DatabaseQueryService:
         result = []
         for task in tasks:
             result.append({
-                "task_id": str(task.id),
-                "task_no": task.task_no,
+                "task_id": str(task.task_id),
+                "task_no": None,  # Task model doesn't have task_no field
                 "crop_cycle_id": str(task.crop_cycle_id) if task.crop_cycle_id else None,
-                "task_type": task.type,
-                "sub_type": task.sub_type,
+                "category": task.category,
+                "subcategory": task.subcategory,
                 "short_description": task.short_description,
                 "description": task.description,
                 "status": task.status,
                 "severity": task.severity,
-                "occurred_at": task.occurred_at.isoformat() if task.occurred_at else None,
-                "resolved_at": task.resolved_at.isoformat() if task.resolved_at else None,
-                "cost": float(task.cost) if task.cost else 0.0,
+                "occurred_at": None,  # Task model doesn't have occurred_at field
+                "resolved_at": task.resolved_date.isoformat() if task.resolved_date else None,
+                "cost": float(task.total_expense) if task.total_expense else 0.0,
                 "created_at": task.created_at.isoformat() if task.created_at else None
             })
         
@@ -147,7 +149,7 @@ class DatabaseQueryService:
         if task_id:
             query = query.filter(WorkOrder.task_id == task_id)
         if work_order_no:
-            query = query.filter(WorkOrder.work_order_no.ilike(f"%{work_order_no}%"))
+            query = query.filter(WorkOrder.work_order_number.ilike(f"%{work_order_no}%"))
         if status:
             query = query.filter(WorkOrder.status == status.lower())
         
@@ -161,10 +163,10 @@ class DatabaseQueryService:
                 total_cost = sum(float(r.cost) if r.cost else 0.0 for r in wo.resources)
             
             result.append({
-                "work_order_id": str(wo.id),
-                "work_order_no": wo.work_order_no,
+                "work_order_id": str(wo.work_order_id),
+                "work_order_number": wo.work_order_number,
                 "task_id": str(wo.task_id) if wo.task_id else None,
-                "title": wo.title,
+                "short_description": wo.short_description,
                 "description": wo.description,
                 "status": wo.status,
                 "due_date": wo.due_date.isoformat() if wo.due_date else None,
@@ -189,10 +191,10 @@ class DatabaseQueryService:
         tasks = self.db.query(Task).filter(Task.crop_cycle_id == incident_id).all()
         
         # Calculate task costs
-        task_costs = sum(float(task.cost) if task.cost else 0.0 for task in tasks)
+        task_costs = sum(float(task.total_expense) if task.total_expense else 0.0 for task in tasks)
         
         # Get all work orders for tasks in this cycle
-        task_ids = [task.id for task in tasks]
+        task_ids = [task.task_id for task in tasks]
         work_orders = []
         if task_ids:
             work_orders = self.db.query(WorkOrder).filter(WorkOrder.task_id.in_(task_ids)).all()
@@ -234,17 +236,18 @@ class DatabaseQueryService:
         task_list = []
         for task in tasks:
             task_list.append({
-                "task_id": str(task.id),
-                "task_no": task.task_no,
-                "task_type": task.type,
+                "task_id": str(task.task_id),
+                "task_no": None,  # Task model doesn't have task_no field
+                "category": task.category,
+                "subcategory": task.subcategory,
                 "short_description": task.short_description,
                 "status": task.status,
-                "cost": float(task.cost) if task.cost else 0.0,
-                "occurred_at": task.occurred_at.isoformat() if task.occurred_at else None
+                "cost": float(task.total_expense) if task.total_expense else 0.0,
+                "occurred_at": None  # Task model doesn't have occurred_at field
             })
         
         # Get work orders
-        task_ids = [task.id for task in tasks]
+        task_ids = [task.task_id for task in tasks]
         work_orders = []
         if task_ids:
             work_orders_query = self.db.query(WorkOrder).filter(WorkOrder.task_id.in_(task_ids))
@@ -255,9 +258,9 @@ class DatabaseQueryService:
                     total_cost = sum(float(r.cost) if r.cost else 0.0 for r in wo.resources)
                 
                 work_orders.append({
-                    "work_order_id": str(wo.id),
-                    "work_order_no": wo.work_order_no,
-                    "title": wo.title,
+                    "work_order_id": str(wo.work_order_id),
+                    "work_order_number": wo.work_order_number,
+                    "short_description": wo.short_description,
                     "status": wo.status,
                     "total_cost": total_cost
                 })
@@ -289,26 +292,34 @@ class DatabaseQueryService:
     
     def get_task_by_no(self, task_no: str) -> Optional[Dict[str, Any]]:
         """
-        Get task by task number
+        Get task by task number (UUID) or task_id
         
         Returns:
             Task dictionary or None if not found
         """
-        task = self.db.query(Task).filter(Task.task_no == task_no).first()
+        # Try to parse as UUID and query by task_id
+        try:
+            task_uuid = UUID(task_no)
+            task = self.db.query(Task).filter(Task.task_id == task_uuid).first()
+        except ValueError:
+            # If not a valid UUID, return None
+            return None
+        
         if not task:
             return None
         
         return {
-            "task_id": str(task.id),
-            "task_no": task.task_no,
+            "task_id": str(task.task_id),
+            "task_no": None,  # Task model doesn't have task_no field
             "crop_cycle_id": str(task.crop_cycle_id) if task.crop_cycle_id else None,
-            "task_type": task.type,
+            "category": task.category,
+            "subcategory": task.subcategory,
             "short_description": task.short_description,
             "description": task.description,
             "status": task.status,
             "severity": task.severity,
-            "cost": float(task.cost) if task.cost else 0.0,
-            "occurred_at": task.occurred_at.isoformat() if task.occurred_at else None
+            "cost": float(task.total_expense) if task.total_expense else 0.0,
+            "occurred_at": None  # Task model doesn't have occurred_at field
         }
     
     def get_available_users(self) -> List[Dict[str, Any]]:

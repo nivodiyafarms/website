@@ -31,10 +31,10 @@ const Dashboard = () => {
       const cropCycles = cropCyclesRes.data;
       const fields = fieldsRes.data;
 
-      const activeCycles = cropCycles.filter((c) => c.status === 'OPEN');
-      const closedCycles = cropCycles.filter((c) => c.status === 'CLOSED');
+      const activeCycles = cropCycles.filter((c) => (c.status || '').toLowerCase() === 'open');
+      const closedCycles = cropCycles.filter((c) => (c.status || '').toLowerCase() === 'closed');
 
-      // Fetch tasks for all cycles to get total cost
+      // Total tasks and cost from expenditure (includes work_order_resource costs)
       let totalTasks = 0;
       let totalCost = 0;
 
@@ -45,14 +45,17 @@ const Dashboard = () => {
         stageDist[stage] = (stageDist[stage] || 0) + 1;
       });
 
-      // Fetch task counts for active cycles (sample for performance)
+      // Use expenditure endpoint so Total Cost includes work order resource costs
       for (const cycle of activeCycles.slice(0, 10)) {
+        const cycleId = cycle.crop_cycle_id ?? cycle.incident_id;
+        if (!cycleId) continue;
         try {
-          const tasksRes = await cropCycleIncidentAPI.getTasks(cycle.incident_id);
-          totalTasks += tasksRes.data.length;
-          totalCost += tasksRes.data.reduce((sum, task) => sum + (task.total_cost || 0), 0);
+          const expRes = await cropCycleIncidentAPI.getCycleExpenditure(cycleId);
+          const data = expRes.data || {};
+          totalTasks += data.task_count ?? 0;
+          totalCost += Number(data.total_expenditure) || 0;
         } catch (err) {
-          console.log('Failed to fetch tasks for cycle:', cycle.incident_id);
+          console.log('Failed to fetch expenditure for cycle:', cycleId);
         }
       }
 
@@ -67,9 +70,10 @@ const Dashboard = () => {
 
       setStageDistribution(stageDist);
 
-      // Get recent 6 crop cycles
+      // Get recent 6 crop cycles (sort by created_at or sowing_date; API has no opened_at)
       const recent = cropCycles
-        .sort((a, b) => new Date(b.opened_at) - new Date(a.opened_at))
+        .slice()
+        .sort((a, b) => new Date(b.created_at || b.sowing_date) - new Date(a.created_at || a.sowing_date))
         .slice(0, 6);
       setRecentCropCycles(recent);
     } catch (error) {
@@ -115,6 +119,7 @@ const Dashboard = () => {
   ];
 
   const getStageColor = (stage) => {
+    const key = (stage || '').toUpperCase();
     const colors = {
       SOWING: 'bg-yellow-100 text-yellow-800',
       GERMINATION: 'bg-lime-100 text-lime-800',
@@ -126,10 +131,11 @@ const Dashboard = () => {
       SALE: 'bg-purple-100 text-purple-800',
       PAYMENT: 'bg-emerald-100 text-emerald-800',
     };
-    return colors[stage] || 'bg-gray-100 text-gray-800';
+    return colors[key] || 'bg-gray-100 text-gray-800';
   };
 
   const getStageIcon = (stage) => {
+    const key = (stage || '').toUpperCase();
     const icons = {
       SOWING: '🌱',
       GERMINATION: '🌿',
@@ -141,7 +147,7 @@ const Dashboard = () => {
       SALE: '💰',
       PAYMENT: '💳',
     };
-    return icons[stage] || '🌱';
+    return icons[key] || '🌱';
   };
 
   const handleCycleClick = (cycleId) => {
@@ -263,8 +269,8 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {recentCropCycles.map((cycle) => (
                 <div
-                  key={cycle.incident_id}
-                  onClick={() => handleCycleClick(cycle.incident_id)}
+                  key={cycle.crop_cycle_id ?? cycle.incident_id}
+                  onClick={() => handleCycleClick(cycle.crop_cycle_id ?? cycle.incident_id)}
                   className="p-4 border-2 border-gray-200 rounded-lg hover:border-primary-500 hover:shadow-md transition cursor-pointer group"
                 >
                   <div className="flex items-start justify-between mb-3">
@@ -281,7 +287,7 @@ const Dashboard = () => {
                     </div>
                     <span
                       className={`px-2 py-1 rounded text-xs font-semibold ${
-                        cycle.status === 'OPEN'
+                        (cycle.status || '').toLowerCase() === 'open'
                           ? 'bg-green-100 text-green-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}
@@ -293,7 +299,7 @@ const Dashboard = () => {
                   <div className="space-y-2 mb-3">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-600">Field:</span>
-                      <span className="font-semibold text-gray-900">{cycle.field_id}</span>
+                      <span className="font-semibold text-gray-900">{cycle.field_code ?? cycle.field_id}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-600">Sowing:</span>

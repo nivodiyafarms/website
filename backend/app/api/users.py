@@ -29,10 +29,10 @@ def get_users(db: Session = Depends(get_db), current_user: User = Depends(get_cu
         # Convert language string to enum
         language_enum = None
         if user.language:
-            lang_str = str(user.language).upper()
-            if lang_str in ["EN_IN", "EN-IN"]:
+            lang_str = str(user.language).lower()
+            if lang_str in ["en_in", "en-in"]:
                 language_enum = UserLanguage.EN_IN
-            elif lang_str in ["HI_IN", "HI-IN"]:
+            elif lang_str in ["hi_in", "hi-in"]:
                 language_enum = UserLanguage.HI_IN
             else:
                 try:

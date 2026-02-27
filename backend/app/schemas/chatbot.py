@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from uuid import UUID
 from datetime import datetime
-from app.models.task import TaskType, ResourceType
+from app.models.task import ResourceType
 from app.models.work_order import WorkOrderStatus
 
 

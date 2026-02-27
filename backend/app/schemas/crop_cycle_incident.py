@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime, date
 from uuid import UUID
 from app.models.crop_cycle_incident import CropStage, CropCycleStatus
-from app.models.task import TaskType, TaskStatus, SeverityLevel, ResourceType
+from app.models.task import TaskStatus, SeverityLevel, ResourceType
 from app.models.work_order import WorkOrderStatus
 
 
@@ -103,7 +103,8 @@ class TaskResourceResponse(TaskResourceBase):
 # ============ Task (Child Incident) Schemas ============
 
 class TaskBase(BaseModel):
-    task_type: TaskType  # Required - database constraint: task_type NOT NULL
+    category: Optional[str] = None  # Replaces task_type
+    subcategory: Optional[str] = None  # Replaces task_type
     short_description: str  # Required - database constraint: short_description NOT NULL
     description: Optional[str] = None
     assigned_to_id: UUID  # Required - database constraint: assigned_to_id NOT NULL
@@ -123,7 +124,8 @@ class TaskCreate(TaskBase):
 
 
 class TaskUpdate(BaseModel):
-    task_type: Optional[TaskType] = None
+    category: Optional[str] = None  # Replaces task_type
+    subcategory: Optional[str] = None  # Replaces task_type
     short_description: Optional[str] = None
     description: Optional[str] = None
     assigned_to_id: Optional[UUID] = None
@@ -206,7 +208,8 @@ class WorkOrderResponse(WorkOrderBase):
 # ============ Voice Recording Schemas for Tasks ============
 
 class VoiceTaskData(BaseModel):
-    task_type: Optional[TaskType] = None
+    category: Optional[str] = None  # Replaces task_type
+    subcategory: Optional[str] = None  # Replaces task_type
     short_description: Optional[str] = None
     description: Optional[str] = None
     labor_count: Optional[int] = None

@@ -1,5 +1,13 @@
-from sqlalchemy import Column, String, Date, Text, DateTime, Enum as SQLEnum, Numeric, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+# backend/app/models/crop_cycle.py
+from sqlalchemy import (
+    Column,
+    String,
+    Date,
+    DateTime,
+    Numeric,
+    and_,
+)
+from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
 from sqlalchemy.orm import relationship, foreign
 import uuid
 import enum
@@ -7,6 +15,9 @@ from datetime import datetime
 from app.database import Base
 
 
+# -----------------------------
+# Crop Stage (Lifecycle) - Lowercase to match Supabase
+# -----------------------------
 class CropStage(str, enum.Enum):
     SOWING = "sowing"
     GERMINATION = "germination"
@@ -19,167 +30,107 @@ class CropStage(str, enum.Enum):
     PAYMENT = "payment"
 
 
+# -----------------------------
+# Crop Cycle Status - Lowercase to match Supabase
+# -----------------------------
 class CropCycleStatus(str, enum.Enum):
     OPEN = "open"
+    RESOLVED = "resolved"
+    REOPENED = "reopened"
     CLOSED = "closed"
+    CANCELLED = "cancelled"
 
 
+# -----------------------------
+# Crop Cycle Model
+# -----------------------------
 class CropCycle(Base):
     """
-    Crop Cycle - Represents a crop cycle in the database
-    Matches the crop_cycles table schema exactly
+    Crop Cycle = 1 crop on 1 field for 1 season
+    This is the ROOT entity for tasks & work orders
     """
     __tablename__ = "crop_cycles"
 
-    # Primary Key
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Primary key - maps to database column 'crop_cycle_id'
+    id = Column('crop_cycle_id', UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
-    # Incident Number
-    incident_no = Column(Text, nullable=True, unique=True)
-    
-    # Field Information
-    field_code = Column(Text, nullable=False)  # Changed from field_id
-    
-    # Season
-    season = Column(Text, nullable=False)
-    
-    # Crop Information
-    crop_name = Column(Text, nullable=False)  # Changed from crop
-    seed_category = Column(Text, nullable=True)  # Changed from variety
-    
-    # Dates
-    sowing_date = Column(Date, nullable=True)  # Changed from NOT NULL
-    expected_harvest_date = Column(Date, nullable=True)  # Changed from expected_harvest
-    actual_harvest_date = Column(Date, nullable=True)  # New field
-    resolved_date = Column(Date, nullable=True)  # New field
-    
-    # Area
-    cultivated_area = Column(Numeric, nullable=True)  # New field
-    
-    # Current Status
-    current_stage = Column(String(11), nullable=True)  # Changed from stage, enum type
-    status = Column(String(9), nullable=True)  # Changed from NOT NULL, enum type
-    
-    # Descriptions
-    short_description = Column(Text, nullable=True)  # New field
-    description = Column(Text, nullable=True)  # New field
-    observation = Column(Text, nullable=True)  # New field
-    resolution_comments = Column(Text, nullable=True)  # New field
-    
-    # Financial
-    total_expense = Column(Numeric, nullable=True, default=0)  # New field
-    total_revenue = Column(Numeric, nullable=True, default=0)  # New field
-    profit = Column(Numeric, nullable=True, default=0)  # New field
-    
-    # Created By (FK to users.user_id)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
-    
-    # Timestamps
-    created_at = Column(DateTime, nullable=True, default=datetime.utcnow)  # Changed from NOT NULL
-    updated_at = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)  # Changed from NOT NULL
-    
-    # Relationships
-    # Note: field relationship removed since field_code is TEXT, not FK
-    # Note: supervisor relationship removed since created_by is the user reference
-    # Note: tasks relationship removed - tasks belong to crop_cycle_incidents, not crop_cycles
-    notes = relationship("Note", primaryjoin="and_(foreign(Note.related_id)==CropCycle.id, Note.related_type=='crop_cycle')", viewonly=True)
-    
-    # Property aliases for backward compatibility (if needed)
+    # Property to expose crop_cycle_id for API compatibility
     @property
     def crop_cycle_id(self):
-        """Alias for id for backward compatibility"""
+        """Alias for id to match API response format"""
         return self.id
+
+    # Human-readable code (INC00001)
+    incident_no = Column(String(20), unique=True, nullable=False, index=True)
+
+    # Basic relations (kept loose for demo)
+    field_code = Column(String, nullable=False)
+    created_by = Column(UUID(as_uuid=True), nullable=True)
+
+    # Crop details
+    crop_name = Column(String(100), nullable=False)
+    seed_category = Column(String(100), nullable=True)
+    season = Column(String(20), nullable=True)  # kharif / rabi / zaid
+
+    # Area & seed
+    cultivated_area = Column(Numeric(10, 2), nullable=True)  # Changed from area_acre to match Supabase
+    seed_quantity = Column(Numeric(10, 2), nullable=True)
+
+    # Dates
+    sowing_date = Column(Date, nullable=False)
+    expected_harvest_date = Column(Date, nullable=True)
+    actual_harvest_date = Column(Date, nullable=True)
+
+    # Stage & status
+    current_stage = Column(
+        PGEnum(CropStage, name="cycle_stage_enum", create_type=False, schema="public", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        nullable=False,
+        default=CropStage.SOWING,
+    )
+    status = Column(
+        PGEnum(CropCycleStatus, name="cycle_status_enum", create_type=False, schema="public", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        nullable=False,
+        default=CropCycleStatus.OPEN,
+    )
+
+    # Financial rollups
+    total_expense = Column(Numeric(14, 2), default=0)
+    total_revenue = Column(Numeric(14, 2), default=0)
+    profit = Column(Numeric(14, 2), default=0)
+
+    # Resolution
+    resolved_date = Column(Date, nullable=True)
+    resolution_comments = Column(String, nullable=True)
+    observation = Column(String, nullable=True)
     
-    @property
-    def crop(self):
-        """Alias for crop_name for backward compatibility"""
-        return self.crop_name
-    
-    @property
-    def variety(self):
-        """Alias for seed_category for backward compatibility"""
-        return self.seed_category
-    
-    @property
-    def expected_harvest(self):
-        """Alias for expected_harvest_date for backward compatibility"""
-        return self.expected_harvest_date
-    
-    @property
-    def stage(self):
-        """Alias for current_stage for backward compatibility"""
-        return self.current_stage
-    
-    # Additional aliases for CropCycleIncident compatibility
-    @property
-    def incident_id(self):
-        """Alias for id for CropCycleIncident compatibility"""
-        return self.id
-    
-    @property
-    def field_id(self):
-        """Alias for field_code for backward compatibility"""
-        return self.field_code
-    
-    @field_id.setter
-    def field_id(self, value):
-        """Setter for field_code"""
-        self.field_code = value
-    
-    @property
-    def crop_variety(self):
-        """Alias for seed_category for backward compatibility"""
-        return self.seed_category
-    
-    @property
-    def opened_at(self):
-        """Alias for created_at for backward compatibility"""
-        return self.created_at
-    
-    @property
-    def closed_at(self):
-        """Alias for resolved_date for backward compatibility"""
-        return self.resolved_date
-    
-    @closed_at.setter
-    def closed_at(self, value):
-        """Setter for resolved_date"""
-        self.resolved_date = value
-    
-    @property
-    def supervisor_id(self):
-        """Alias for created_by for backward compatibility"""
-        return self.created_by
-    
-    # Properties for CropCycleIncidentResponse compatibility
-    @property
-    def is_voice_recorded(self):
-        """Default value for is_voice_recorded (not in database)"""
-        return "no"
-    
-    @property
-    def audio_file_path(self):
-        """Default value for audio_file_path (not in database)"""
-        return None
-    
-    @property
-    def transcript(self):
-        """Default value for transcript (not in database)"""
-        return None
-    
-    # Property to convert Date to datetime for response schema
-    @property
-    def sowing_date_datetime(self):
-        """Convert sowing_date (Date) to datetime for response"""
-        if self.sowing_date:
-            from datetime import datetime
-            return datetime.combine(self.sowing_date, datetime.min.time())
-        return None
-    
-    @property
-    def expected_harvest_date_datetime(self):
-        """Convert expected_harvest_date (Date) to datetime for response"""
-        if self.expected_harvest_date:
-            from datetime import datetime
-            return datetime.combine(self.expected_harvest_date, datetime.min.time())
-        return None
+    # Additional fields from database
+    short_description = Column(String, nullable=True)
+    description = Column(String, nullable=True)
+
+    # Audit
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+# -----------------------------
+# Notes relationship (polymorphic)
+# -----------------------------
+def _configure_crop_cycle_notes():
+    from app.models.note import Note
+
+    CropCycle.notes = relationship(
+        "Note",
+        primaryjoin=and_(
+            foreign(Note.related_id) == CropCycle.id,
+            Note.related_type == "crop_cycle",
+        ),
+        viewonly=True,
+    )
+
+
+_configure_crop_cycle_notes()

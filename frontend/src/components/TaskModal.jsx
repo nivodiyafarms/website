@@ -69,21 +69,15 @@ const TASK_TYPE_TO_CATEGORY = {
   "other": "बुआई", // Default fallback
 };
 
-// Helper function to find category from task_type and sub_type
-function findCategoryFromTaskType(taskType, subType) {
-  if (!taskType) return "";
+// Helper function to find category from subcategory (legacy support for old data)
+// Note: task_type is deprecated, use category/subcategory directly
+function findCategoryFromSubcategory(subcategory) {
+  if (!subcategory) return "";
   
-  // First try direct mapping
-  if (TASK_TYPE_TO_CATEGORY[taskType]) {
-    return TASK_TYPE_TO_CATEGORY[taskType];
-  }
-  
-  // Try to find category by checking sub_type in categories
-  if (subType) {
-    for (const [category, subCategories] of Object.entries(categories)) {
-      if (subCategories.includes(subType)) {
-        return category;
-      }
+  // Try to find category by checking subcategory in categories
+  for (const [category, subCategories] of Object.entries(categories)) {
+    if (subCategories.includes(subcategory)) {
+      return category;
     }
   }
   
@@ -97,7 +91,7 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) =
   const [formData, setFormData] = useState({
     task_id: "",
     category: "",
-    sub_category: "",
+    subcategory: "",
     status: "नया",
     opened_by: "",
     opened_date: "",
@@ -116,16 +110,15 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) =
       const backendStatus = editing.status || "";
       const hindiStatus = STATUS_REVERSE_MAPPING[backendStatus] || backendStatus || "नया";
       
-      // Map task_type back to category for form display
-      const taskType = editing.task_type || editing.type || "";
-      const subType = editing.sub_type || editing.sub_category || "";
-      const mappedCategory = editing.category || findCategoryFromTaskType(taskType, subType);
+      // Use category/subcategory directly (task_type is deprecated)
+      const subType = editing.subcategory || editing.sub_type || "";
+      const mappedCategory = editing.category || findCategoryFromSubcategory(subType);
       
       // Map backend response to frontend form format
       setFormData({
         task_id: editing.task_id || editing.id || "",
         category: mappedCategory,
-        sub_category: subType,
+        subcategory: subType,
         status: hindiStatus, // Convert English status to Hindi for form
         opened_by: editing.opened_by || editing.created_by_id || "",
         opened_date: editing.opened_date || editing.occurred_at || "",
@@ -141,7 +134,7 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) =
       setFormData({
         task_id: "",
         category: "",
-        sub_category: "",
+        subcategory: "",
         status: "नया",
         opened_by: "",
         opened_date: "",
@@ -172,17 +165,32 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) =
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Validate update_notes when updating/closing
-    const isClosing = formData.status === "बंद" || formData.status === "समाधान किया गया";
-    const isUpdating = editing !== null;
-    
-    if ((isClosing || isUpdating) && !formData.update_notes?.trim()) {
-      alert("कृपया अपडेट/बंद करने का कारण दर्ज करें (Please provide a reason for updating/closing this task)");
-      return;
-    }
+    // Only send valid fields to backend
+    const validData = {
+      category: formData.category,
+      subcategory: formData.subcategory,
+      short_description: formData.short_description,
+      description: formData.description,
+      assigned_to_id: formData.assigned_to_id || formData.opened_by, // Map opened_by to assigned_to_id if needed
+      severity: formData.severity,
+      // Only include status if editing
+      ...(editing && { status: formData.status }),
+      // Only include resolution fields if resolved
+      ...(formData.status === "समाधान किया गया" && {
+        resolution_comments: formData.resolution_notes || formData.resolution_comments,
+        observation: formData.observation,
+      }),
+      // Only include on_hold_reason if on hold
+      ...(formData.status === "रोक पर" && {
+        on_hold_reason: formData.on_hold_reason,
+      }),
+    };
+
+    // Remove invalid fields: opened_by, opened_date, resolution_notes, update_notes
+    // These are not part of TaskCreate schema
     
     // Transform form data to match backend schema
-    const transformedData = transformTaskRequest(formData);
+    const transformedData = transformTaskRequest(validData);
     onSubmit(transformedData);
     onClose();
   };
@@ -265,7 +273,7 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) =
                 setFormData({
                   ...formData,
                   category: e.target.value,
-                  sub_category: "",
+                  subcategory: "",
                 })
               }
             />
@@ -275,9 +283,9 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) =
               options={
                 formData.category ? categories[formData.category] : []
               }
-              value={formData.sub_category}
+              value={formData.subcategory}
               onChange={(e) =>
-                setFormData({ ...formData, sub_category: e.target.value })
+                setFormData({ ...formData, subcategory: e.target.value })
               }
             />
 
@@ -299,7 +307,7 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) =
             />
 
             <Select
-              label="स्थिति"
+              label="वर्तमान चरण"
               options={statusFlow}
               value={formData.status}
               onChange={(e) =>
@@ -324,7 +332,7 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) =
         {/* TABS */}
         <div className="px-6">
           {activeTab === "Notes" && (
-            <Card title="🗒️ Notes">
+            <Card title="🗒️ टिप्पणियाँ">
               <textarea
                 className="w-full border p-4 rounded-xl"
                 rows={4}
@@ -351,7 +359,7 @@ const TaskModal = ({ isOpen, onClose, onSubmit, cropCycleId, editing = null }) =
                 }
               />
               <VoiceTextarea
-                label="समाधान विवरण"
+                label="समाधान टिप्पणियाँ"
                 field="resolution_notes"
                 rows={4}
               />

@@ -5,7 +5,8 @@ import PrivateRoute from './utils/PrivateRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import CropCycleManagementComplete from './pages/CropCycleManagementComplete';
+import CropCycleManagement from './pages/CropCycleManagement';
+import TaskDetailPage from './pages/TaskDetailPage';
 import GeneralPurpose from './pages/GeneralPurpose';
 
 function App() {
@@ -32,7 +33,19 @@ function App() {
             element={
               <PrivateRoute>
                 <Layout>
-                  <CropCycleManagementComplete />
+                  <CropCycleManagement />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Task Detail Page Route */}
+          <Route
+            path="/crop-cycles/:cycleId/tasks/:taskId"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <TaskDetailPage />
                 </Layout>
               </PrivateRoute>
             }

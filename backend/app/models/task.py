@@ -1,164 +1,149 @@
-from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Enum as SQLEnum, Numeric, Integer, Float
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship, foreign
+# backend/app/models/task.py
+
+from sqlalchemy import (
+    Column, String, DateTime, Text, ForeignKey,
+    Numeric
+)
+from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
+from sqlalchemy.orm import relationship
 from datetime import datetime
-import enum
-import uuid
+import enum, uuid
+
 from app.database import Base
 
 
-class TaskType(str, enum.Enum):
-    """Task types - used for validation, stored as VARCHAR(11) in database"""
-    IRRIGATION = "irrigation"
-    ELECTRICAL = "electrical"  # Added for frontend compatibility
-    ROAD = "road"  # Added for frontend compatibility
-    FERTILIZER = "fertilizer"
-    PESTICIDE = "pesticide"
-    FUNGICIDE = "fungicide"
-    HERBICIDE = "herbicide"
-    WEEDING = "weeding"
-    LABOR = "labor"
-    SPRAY = "spray"
-    SCOUTING = "scouting"
-    TRANSPORT = "transport"
-    HARVEST = "harvest"
-    STORAGE_IN = "storage_in"
-    STORAGE_OUT = "storage_out"
-    SALE = "sale"
-    PAYMENT = "payment"
-    OTHER = "other"
-
-
+# -----------------------------
+# Enums
+# -----------------------------
 class TaskStatus(str, enum.Enum):
     NEW = "new"
     IN_PROGRESS = "in_progress"
     ON_HOLD = "on_hold"
     RESOLVED = "resolved"
-    CLOSED = "closed"
     REOPENED = "reopened"
+    CLOSED = "closed"
     CANCELLED = "cancelled"
 
 
+# TaskType enum REMOVED - tasks now use category and subcategory (PostgreSQL enums)
+
+
 class SeverityLevel(str, enum.Enum):
-    SEV_1 = "sev1"  # Critical
-    SEV_2 = "sev2"  # High
-    SEV_3 = "sev3"  # Medium
-    SEV_4 = "sev4"  # Low
+    SEV1 = "sev1"
+    SEV2 = "sev2"
+    SEV3 = "sev3"
+    SEV4 = "sev4"
 
 
-class ResourceType(str, enum.Enum):
-    """Resource types - used for validation in work orders"""
-    LABOR = "labor"
-    EQUIPMENT = "equipment"
-    MATERIAL = "material"
-    WATER = "water"
+class TaskCategory(str, enum.Enum):
+    SOWING = "sowing"
+    IRRIGATION = "irrigation"
+    FERTILIZER = "fertilizer"
+    HARVEST = "harvest"
     FUEL = "fuel"
+    SALE = "sale"
+    STORAGE = "storage"
 
 
+class TaskSubcategory(str, enum.Enum):
+    KHURAR = "khurar"
+    ROTAVATOR = "rotavator"
+    LEVELING = "leveling"
+    SEEDING = "seeding"
+    PLOUGHING = "ploughing"
+    MULCHING = "mulching"
+    PALEVA = "paleva"
+    FIRST_IRRIGATION = "first_irrigation"
+    SECOND_IRRIGATION = "second_irrigation"
+    THIRD_IRRIGATION = "third_irrigation"
+    FOURTH_IRRIGATION = "fourth_irrigation"
+    FIFTH_IRRIGATION = "fifth_irrigation"
+    CONTRACT_IRRIGATION = "contract_irrigation"
+    SEED_TREATMENT = "seed_treatment"
+    DAP = "dap"
+    UREA = "urea"
+    PESTICIDE = "pesticide"
+    POTASH = "potash"
+    ZINC = "zinc"
+    SULFUR = "sulfur"
+    SUPER_PHOSPHATE = "super_phosphate"
+    MANUAL_CUTTING = "manual_cutting"
+    THRESHER = "thresher"
+    HARVESTER = "harvester"
+    WINNOWING = "winnowing"
+    CONTRACT_HARVEST = "contract_harvest"
+    DIESEL = "diesel"
+    PETROL = "petrol"
+    MANDI_SALE = "mandi_sale"
+    SOCIETY_SALE = "society_sale"
+    FARM_ID = "farm_id"
+    WAREHOUSE = "warehouse"
+    OTHER = "other"
+
+
+# -----------------------------
+# Task Model
+# -----------------------------
 class Task(Base):
-    """
-    Task - Represents a task within a crop cycle
-    Matches the actual tasks table schema in database
-    """
     __tablename__ = "tasks"
 
-    # Primary Key - database uses task_id, not id
     task_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    # Parent Crop Cycle - references crop_cycle_incidents table
-    crop_cycle_id = Column(UUID(as_uuid=True), ForeignKey("crop_cycle_incidents.incident_id"), nullable=False)
-    
-    # Task Information
-    task_type = Column(String(11), nullable=False)  # Database uses task_type, not type
-    short_description = Column(String(200), nullable=False)  # NOT NULL in database
+
+    task_number = Column(String(20), unique=True, nullable=False, index=True)
+
+    crop_cycle_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("crop_cycles.crop_cycle_id", ondelete="RESTRICT"),
+        nullable=False
+    )
+
+    # Classification (category and subcategory replace task_type)
+    category = Column(
+        PGEnum(TaskCategory, name="task_category_enum", create_type=False, values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        nullable=True
+    )
+    subcategory = Column(
+        PGEnum(TaskSubcategory, name="task_subcategory_enum", create_type=False, values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        nullable=True
+    )
+
+    short_description = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
-    
-    # Assignment (FKs to users table, not auth.users)
-    assigned_to_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)  # NOT NULL in database
-    created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)  # NOT NULL in database
-    approved_by_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
-    
-    # Execution Details
-    occurred_at = Column(DateTime, nullable=True)
-    
-    # Labor tracking
-    labor_count = Column(Integer, nullable=True)
-    labor_hours = Column(Float, nullable=True)
-    
-    # Cost
-    total_cost = Column(Float, nullable=False)  # Database uses total_cost, NOT NULL
-    
-    # Outcome
-    outcome_observation = Column(Text, nullable=True)
-    
-    # Severity
-    severity = Column(String(5), nullable=True)  # VARCHAR(5) in database
-    
-    # Status
-    status = Column(String(11), nullable=False)  # NOT NULL in database
-    
-    # Hold and resolution
+
+    assigned_to_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.user_id"),
+        nullable=False
+    )
+    created_by_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.user_id"),
+        nullable=False
+    )
+
+    status = Column(
+        PGEnum(TaskStatus, name="task_status_enum", create_type=False, values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        default=TaskStatus.NEW,
+        nullable=False
+    )
+
     on_hold_reason = Column(Text, nullable=True)
-    resolution_notes = Column(Text, nullable=True)
-    
-    # GPS
-    gps_lat = Column(Float, nullable=True)
-    gps_lng = Column(Float, nullable=True)
-    
-    # Attachments
-    attachments = Column(Text, nullable=True)
-    
-    # Timestamps
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)  # NOT NULL in database
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)  # NOT NULL in database
-    closed_at = Column(DateTime, nullable=True)  # Database uses closed_at, not resolved_at
-    
-    # Voice recording
-    is_voice_recorded = Column(String(10), nullable=False, default="no")  # NOT NULL in database
-    audio_file_path = Column(String(500), nullable=True)
-    transcript = Column(Text, nullable=True)
-    
+
+    # Resolution
+    resolved_date = Column(DateTime, nullable=True)
+    resolution_comments = Column(Text, nullable=True)
+    observation = Column(Text, nullable=True)
+
+    severity = Column(PGEnum(SeverityLevel, name="severity_enum", create_type=False, values_callable=lambda enum_cls: [e.value for e in enum_cls]), nullable=True)
+
+    total_expense = Column(Numeric(14, 2), default=0)
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+
     # Relationships
-    # Note: crop_cycle_incidents table, not crop_cycles
-    crop_cycle_incident = relationship("CropCycleIncident", foreign_keys=[crop_cycle_id], viewonly=True)
-    work_orders = relationship("WorkOrder", back_populates="task", foreign_keys="WorkOrder.task_id")
-    notes = relationship("Note", primaryjoin="and_(foreign(Note.related_id)==Task.task_id, Note.related_type=='task')", viewonly=True)
-    assigned_to_user = relationship("User", foreign_keys=[assigned_to_id], viewonly=True)
-    created_by_user = relationship("User", foreign_keys=[created_by_id], viewonly=True)
-    approved_by_user = relationship("User", foreign_keys=[approved_by_id], viewonly=True)
-    
-    # Property aliases for backward compatibility
-    @property
-    def id(self):
-        """Alias for task_id for backward compatibility"""
-        return self.task_id
-    
-    @property
-    def type(self):
-        """Alias for task_type for backward compatibility"""
-        return self.task_type
-    
-    @property
-    def created_by(self):
-        """Alias for created_by_id for backward compatibility"""
-        return self.created_by_id
-    
-    @property
-    def approved_by(self):
-        """Alias for approved_by_id for backward compatibility"""
-        return self.approved_by
-    
-    @property
-    def cost(self):
-        """Alias for total_cost for backward compatibility"""
-        return self.total_cost
-    
-    @property
-    def resolved_at(self):
-        """Alias for closed_at for backward compatibility"""
-        return self.closed_at
-    
-    @property
-    def crop_cycle(self):
-        """Alias for crop_cycle_incident for backward compatibility"""
-        return self.crop_cycle_incident
+    crop_cycle = relationship("CropCycle", backref="tasks")
+    work_orders = relationship("WorkOrder", back_populates="task")
+    assigned_to = relationship("User", foreign_keys=[assigned_to_id])
+    created_by = relationship("User", foreign_keys=[created_by_id])

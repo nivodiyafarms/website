@@ -49,7 +49,7 @@ class GeneralExpenseUpdate(BaseModel):
 
 class GeneralExpenseResponse(BaseModel):
     """Schema for general expense response"""
-    id: UUID
+    general_expense_id: UUID
     category: Optional[str] = None
     subcategory: Optional[str] = None
     description: Optional[str] = None

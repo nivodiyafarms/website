@@ -1,6 +1,6 @@
 """
 Utility functions for generating sequential IDs
-Format: IN0001, TA0001, WO0001, etc.
+Format: CC0001, TA0001, WO0001, etc.
 """
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
@@ -9,28 +9,28 @@ from typing import Optional
 
 def generate_incident_id(db: Session) -> str:
     """
-    Generate the next sequential incident ID (IN0001, IN0002, etc.)
+    Generate the next sequential crop cycle ID (CC0001, CC0002, etc.)
     
     Args:
         db: Database session
         
     Returns:
-        str: Next incident ID (e.g., "IN0001")
+        str: Next crop cycle ID (e.g., "CC0001")
     """
-    return _generate_sequential_id(db, "crop_cycles", "incident_no", "IN")
+    return _generate_sequential_id(db, "crop_cycles", "incident_no", "CC")
 
 
 def generate_task_id(db: Session) -> str:
     """
-    Generate the next sequential task ID (TA0001, TA0002, etc.)
+    Generate the next sequential task ID (TSK0001, TSK0002, etc.)
     
     Args:
         db: Database session
         
     Returns:
-        str: Next task ID (e.g., "TA0001")
+        str: Next task ID (e.g., "TSK0001")
     """
-    return _generate_sequential_id(db, "tasks", "task_no", "TA")
+    return _generate_sequential_id(db, "tasks", "task_number", "TSK")
 
 
 def generate_work_order_id(db: Session) -> str:
@@ -43,7 +43,7 @@ def generate_work_order_id(db: Session) -> str:
     Returns:
         str: Next work order ID (e.g., "WO0001")
     """
-    return _generate_sequential_id(db, "work_orders", "work_order_no", "WO")
+    return _generate_sequential_id(db, "work_orders", "work_order_number", "WO")
 
 
 def _generate_sequential_id(db: Session, table_name: str, column_name: str, prefix: str) -> str:
@@ -54,14 +54,14 @@ def _generate_sequential_id(db: Session, table_name: str, column_name: str, pref
         db: Database session
         table_name: Name of the database table
         column_name: Name of the column storing the ID
-        prefix: Prefix for the ID (e.g., "IN", "TA", "WO")
+        prefix: Prefix for the ID (e.g., "CC", "TA", "WO")
         
     Returns:
-        str: Next sequential ID (e.g., "IN0001")
+        str: Next sequential ID (e.g., "CC0001")
     """
     try:
         # Query to find the maximum number from existing IDs
-        # Extract numeric part from IDs like IN0001, IN0002, etc.
+        # Extract numeric part from IDs like CC0001, CC0002, etc.
         query = text(f"""
             SELECT COALESCE(MAX(
                 CAST(

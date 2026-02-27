@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.services.openai_service import OpenAIService
 from app.services.database_query_service import DatabaseQueryService
 from app.models.crop_cycle_incident import CropCycleIncident, CropStage, CropCycleStatus
-from app.models.task import Task, TaskType, TaskStatus
+from app.models.task import Task, TaskStatus
 from app.models.work_order import WorkOrder, WorkOrderStatus
 from app.models.user import User
 from app.utils.id_generator import generate_incident_id, generate_task_id, generate_work_order_id
@@ -58,7 +58,8 @@ class OpenAIChatbotService:
                     "type": "object",
                     "properties": {
                         "crop_cycle_id": {"type": "string", "description": "UUID of the crop cycle this task belongs to"},
-                        "task_type": {"type": "string", "description": "Task type: irrigation, fertilizer, pesticide, weeding, labor, spray, scouting, transport, harvest, storage_in, storage_out, sale, payment, other"},
+                        "category": {"type": "string", "description": "Task category: sowing, irrigation, fertilizer, harvest, fuel, sale, storage"},
+                        "subcategory": {"type": "string", "description": "Task subcategory based on category selected"},
                         "short_description": {"type": "string", "description": "Short description of the task"},
                         "description": {"type": "string", "description": "Detailed description"},
                         "occurred_at": {"type": "string", "description": "When task occurred in ISO format (YYYY-MM-DDTHH:MM:SS)"},
@@ -66,7 +67,7 @@ class OpenAIChatbotService:
                         "cost": {"type": "number", "description": "Total cost of the task"},
                         "created_by": {"type": "string", "description": "UUID of user creating this task"}
                     },
-                    "required": ["crop_cycle_id", "task_type", "short_description"]
+                    "required": ["crop_cycle_id", "category", "short_description"]
                 }
             },
             {
@@ -76,14 +77,14 @@ class OpenAIChatbotService:
                     "type": "object",
                     "properties": {
                         "task_id": {"type": "string", "description": "UUID of the task this work order belongs to"},
-                        "title": {"type": "string", "description": "Title of the work order"},
+                        "short_description": {"type": "string", "description": "Short description of the work order"},
                         "description": {"type": "string", "description": "Description of the work order"},
                         "due_date": {"type": "string", "description": "Due date in YYYY-MM-DD format"},
                         "assigned_to": {"type": "string", "description": "UUID of user assigned to this work order"},
                         "status": {"type": "string", "description": "Work order status: open, in_progress, completed, partially_complete, cancelled"},
                         "created_by": {"type": "string", "description": "UUID of user creating this work order"}
                     },
-                    "required": ["task_id", "title"]
+                    "required": ["task_id", "short_description"]
                 }
             },
             {
@@ -110,7 +111,7 @@ class OpenAIChatbotService:
                         "crop_cycle_id": {"type": "string", "description": "Filter by crop cycle UUID"},
                         "incident_no": {"type": "string", "description": "Filter by crop cycle incident number"},
                         "task_no": {"type": "string", "description": "Filter by task number (e.g., TA0001)"},
-                        "task_type": {"type": "string", "description": "Filter by task type"},
+                        "category": {"type": "string", "description": "Filter by task category"},
                         "status": {"type": "string", "description": "Filter by task status"},
                         "limit": {"type": "integer", "description": "Maximum number of results (default 50)"}
                     }
@@ -383,11 +384,6 @@ Instructions:
                 description=args.get("description")
             )
             
-            # Use existing API logic to create
-            from app.api.crop_cycle_incidents import create_crop_cycle
-            from app.database import get_db
-            from app.auth.security import get_current_user
-            
             # Get current user from database
             user = self.db.query(User).filter(User.id == supervisor_id).first()
             if not user:
@@ -452,27 +448,20 @@ Instructions:
             if not created_by:
                 created_by = current_user_id
             
-            # Convert occurred_at
-            occurred_at = None
-            if args.get("occurred_at"):
-                occurred_at = dt.fromisoformat(args["occurred_at"].replace("Z", "+00:00"))
-            else:
-                occurred_at = dt.now()
-            
             # Create task
+            # Note: Task model doesn't have occurred_at, cost, task_no, or created_by fields
+            # Use: task_id (PK), category, subcategory, assigned_to_id, created_by_id, total_expense
             task = Task(
                 crop_cycle_id=crop_cycle_id,
-                type=args["task_type"],
+                category=args.get("category", "other"),
+                subcategory=args.get("subcategory", "other"),
                 short_description=args["short_description"],
                 description=args.get("description"),
-                occurred_at=occurred_at,
-                status=args.get("status", "new"),
-                cost=args.get("cost", 0),
-                created_by=created_by
+                assigned_to_id=args.get("assigned_to_id", created_by),  # Required field
+                created_by_id=created_by,  # Use created_by_id (Task model field)
+                status=TaskStatus(args.get("status", "new")),  # Convert to enum
+                total_expense=args.get("cost", 0)  # Use total_expense instead of cost
             )
-            
-            # Generate task ID
-            task.task_no = generate_task_id(self.db)
             
             self.db.add(task)
             self.db.commit()
@@ -480,10 +469,10 @@ Instructions:
             
             return {
                 "success": True,
-                "task_id": str(task.id),
-                "task_no": task.task_no,
+                "task_id": str(task.task_id),  # Use task_id (primary key)
+                "task_no": None,  # Task model doesn't have task_no field
                 "crop_cycle_id": str(crop_cycle_id),
-                "message": f"Task created successfully with ID {task.task_no}"
+                "message": f"Task created successfully with ID {task.task_id}"
             }
             
         except Exception as e:
@@ -513,7 +502,7 @@ Instructions:
             # Create work order
             work_order = WorkOrder(
                 task_id=task_id,
-                title=args["title"],
+                short_description=args["short_description"],
                 description=args.get("description"),
                 due_date=due_date,
                 assigned_to=assigned_to,
@@ -522,7 +511,7 @@ Instructions:
             )
             
             # Generate work order ID
-            work_order.work_order_no = generate_work_order_id(self.db)
+            work_order.work_order_number = generate_work_order_id(self.db)
             
             self.db.add(work_order)
             self.db.commit()
@@ -530,10 +519,10 @@ Instructions:
             
             return {
                 "success": True,
-                "work_order_id": str(work_order.id),
-                "work_order_no": work_order.work_order_no,
+                "work_order_id": str(work_order.work_order_id),
+                "work_order_number": work_order.work_order_number,
                 "task_id": str(task_id),
-                "message": f"Work order created successfully with ID {work_order.work_order_no}"
+                "message": f"Work order created successfully with ID {work_order.work_order_number}"
             }
             
         except Exception as e:

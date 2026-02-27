@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Mic, Bot } from "lucide-react";
 import { transformCropCycleRequest } from "../utils/apiTransformers";
 
-export default function IncidentModal({ isOpen, onClose, onSubmit }) {
+export default function CropCycleModal({ isOpen, onClose, onSubmit, editing, fields, supervisors }) {
   const [activeTab, setActiveTab] = useState("Notes");
   const [showAiAssistant, setShowAiAssistant] = useState(false);
 
@@ -17,7 +17,9 @@ export default function IncidentModal({ isOpen, onClose, onSubmit }) {
     fasal: "",
     rakba: "",
     beej_category: "",
+    seed_quantity: "",  // ✅ Added seed_quantity field
     sthiti: "",
+    status: "",
     resolvedDate: null,
     tipanni: "",
     notes: "",
@@ -29,6 +31,41 @@ export default function IncidentModal({ isOpen, onClose, onSubmit }) {
     resolutionComments: "",
     observation: "",
   });
+  
+  const [showResolvedPopup, setShowResolvedPopup] = useState(false);  // ✅ Added popup state
+
+  const isResolutionStatus =
+    formData.sthiti === "समाधान किया" ||
+    formData.sthiti === "रद्द किया गया" ||
+    formData.status === "resolved" ||
+    formData.status === "cancelled";
+
+  // Preload editing data - map backend English fields to Hindi form fields
+  useEffect(() => {
+    if (editing && editing.crop_cycle_id) {
+      setFormData({
+        khet: editing.field_code || '',
+        fasal: editing.crop_name || '',
+        beej_category: editing.seed_category || '',
+        season: editing.season || '',
+        rakba: editing.cultivated_area || '',
+        seed_quantity: editing.seed_quantity || '',
+        buwaiDate: editing.sowing_date || '',
+        katayiDate: editing.expected_harvest_date || '',
+        vartman_charan: editing.current_stage || '',
+        sthiti: editing.status || '',
+        status: editing.status || '',
+        varnan: editing.description || '',
+        tipanni: editing.resolution_comments || '',
+        notes: editing.observation || '',
+        totalExpense: editing.total_expense || '',
+        totalRevenue: editing.total_revenue || '',
+        profit: editing.profit || '',
+        actualHarvestDate: editing.actual_harvest_date || '',
+      });
+    }
+  }, [editing]);
+
   // --------- ENGLISH → HINDI TRANSLITERATION (BASIC) ----------
 const transliterateToHindi = (text) => {
   const map = {
@@ -110,7 +147,15 @@ const handleBeejCategoryChange = (e) => {
       resolvedDate:
         value === "समाधान किया" ? new Date().toISOString() : p.resolvedDate,
     }));
-    if (value === "समाधान किया") setActiveTab("Resolution Information");
+    // ✅ Show popup when status changes to RESOLVED
+    if (value === "समाधान किया" || value === "resolved" || value === "RESOLVED") {
+      setShowResolvedPopup(true);
+      setActiveTab("Resolution Information");
+    }
+  };
+  
+  const handleCloseResolvedPopup = () => {
+    setShowResolvedPopup(false);
   };
 
   useEffect(() => {
@@ -128,8 +173,55 @@ const handleBeejCategoryChange = (e) => {
   }, [formData.sthiti, formData.resolvedDate]);
 
   const handleSubmit = () => {
+    // Validate required fields
+    if (!formData.khet) {
+      alert('Please select a field (खेत)');
+      return;
+    }
+    if (!formData.fasal) {
+      alert('Please enter crop name (फसल)');
+      return;
+    }
+    if (!formData.buwaiDate) {
+      alert('Please select sowing date (बुआई की तारीख)');
+      return;
+    }
+    if (!formData.season) {
+      alert('Please select season (सीजन)');
+      return;
+    }
+
     // Transform form data from Hindi field names to English backend field names
     const transformedData = transformCropCycleRequest(formData);
+    
+    // Double-check required fields after transformation
+    if (!transformedData.field_code || !transformedData.crop_name || !transformedData.sowing_date || !transformedData.season) {
+      alert('Missing required fields. Please fill all required fields.');
+      return;
+    }
+
+    if (
+      formData.sthiti === "समाधान किया" ||
+      formData.sthiti === "रद्द किया गया"
+    ) {
+      if (!formData.resolutionComments?.trim()) {
+        alert("समाधान टिप्पणियाँ आवश्यक हैं");
+        return;
+      }
+      if (!formData.totalExpense && formData.totalExpense !== 0) {
+        alert("कुल व्यय आवश्यक है");
+        return;
+      }
+      if (!formData.totalRevenue && formData.totalRevenue !== 0) {
+        alert("कुल आय आवश्यक है");
+        return;
+      }
+      if (!formData.resolvedDate) {
+        alert("समाधान तिथि आवश्यक है");
+        return;
+      }
+    }
+    
     onSubmit(transformedData);
   };
 
@@ -150,110 +242,119 @@ const handleBeejCategoryChange = (e) => {
     "खोलना","समाधान किया","पुन: खोला गया","बंद","रद्द किया गया"
   ];
 
-  const tabs = ["Notes", "Resolution Information"];
+  const tabs = [
+    ...(isResolutionStatus ? ["Resolution Information"] : [])
+  ];
 
   const renderActiveTabContent = () => {
     if (activeTab === "Resolution Information") {
-  return (
-    <div className="bg-pink-50 p-6 rounded-2xl border space-y-6">
-      <h3 className="text-lg font-bold text-purple-700">
-        📊 फील्ड समाधान विवरण
-      </h3>
+      return isResolutionStatus ? (
+        <div className="bg-pink-50 p-6 rounded-2xl border space-y-6">
+          <h3 className="text-lg font-bold text-purple-700">
+            📊 फील्ड समाधान विवरण
+          </h3>
 
-      {/* EXPENSE & REVENUE */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Input
-          label="कुल व्यय (₹)"
-          type="number"
-          value={formData.totalExpense}
-          onChange={handleCalcChange("totalExpense")}
-          placeholder="कुल खर्च दर्ज करें"
-        />
+          {/* EXPENSE & REVENUE */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <Input
+              label="कुल व्यय (₹)"
+              type="number"
+              value={formData.totalExpense}
+              onChange={handleCalcChange("totalExpense")}
+              placeholder="कुल खर्च दर्ज करें"
+            />
 
-        <Input
-          label="कुल आय (₹)"
-          type="number"
-          value={formData.totalRevenue}
-          onChange={handleCalcChange("totalRevenue")}
-          placeholder="कुल आय दर्ज करें"
-        />
-      </div>
+            <Input
+              label="कुल आय (₹)"
+              type="number"
+              value={formData.totalRevenue}
+              onChange={handleCalcChange("totalRevenue")}
+              placeholder="कुल आय दर्ज करें"
+            />
+          </div>
 
-      {/* PROFIT */}
-      <Input
-        label="लाभ (₹)"
-        type="number"
-        value={formData.profit}
-        disabled
-      />
+          {/* PROFIT */}
+          <Input
+            label="लाभ (₹)"
+            type="number"
+            value={formData.profit}
+            disabled
+          />
 
-      {/* DATES */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Input
-          label="समाधान तिथि"
-          type="date"
-          value={
-            formData.resolvedDate
-              ? formData.resolvedDate.split("T")[0]
-              : ""
-          }
-          disabled
-        />
+          {/* DATES */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <Input
+              label="समाधान तिथि"
+              type="date"
+              value={
+                formData.resolvedDate
+                  ? formData.resolvedDate.split("T")[0]
+                  : ""
+              }
+              disabled
+            />
 
-        <Input
-          label="वास्तविक कटाई तिथि"
-          type="date"
-          value={formData.actualHarvestDate}
-          onChange={handleChange("actualHarvestDate")}
-        />
-      </div>
+            <Input
+              label="वास्तविक कटाई तिथि"
+              type="date"
+              value={formData.actualHarvestDate}
+              onChange={handleChange("actualHarvestDate")}
+            />
+          </div>
 
-      {/* COMMENTS */}
-      <Textarea
-        label="समाधान टिप्पणियाँ"
-        placeholder="समाधान से संबंधित विवरण लिखें..."
-        value={formData.resolutionComments}
-        onChange={handleChange("resolutionComments")}
-      />
+          {/* COMMENTS */}
+          <Textarea
+            label="समाधान टिप्पणियाँ"
+            placeholder="समाधान से संबंधित विवरण लिखें..."
+            value={formData.resolutionComments}
+            onChange={handleChange("resolutionComments")}
+          />
 
-      <Textarea
-        label="निरीक्षण"
-        rows={1}
-        placeholder="निरीक्षण लिखें..."
-        value={formData.observation}
-        onChange={handleChange("observation")}
-      />
-    </div>
-  );
-}
+          <Textarea
+            label="निरीक्षण"
+            rows={1}
+            placeholder="निरीक्षण लिखें..."
+            value={formData.observation}
+            onChange={handleChange("observation")}
+          />
+        </div>
+      ) : null;
+    }
 
-    return (
-      <div className="relative">
-        <button
-          onClick={() => setShowAiAssistant(true)}
-          className="absolute right-0 top-0 bg-purple-600 text-white px-4 py-2 rounded-xl flex gap-2 shadow"
-        >
-          <Bot size={18} /> AI Assist
-        </button>
-
-        <textarea
-          className="w-full border p-4 rounded-xl mt-12"
-          rows={4}
-          value={formData.notes}
-          onChange={handleChange("notes")}
-          placeholder="नोट्स लिखें..."
-        />
-
-        <input type="file" className="mt-4" onChange={handleFileUpload} />
-      </div>
-    );
+    return null;
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-white w-full max-w-6xl rounded-3xl shadow-2xl">
+    <>
+      {/* ✅ RESOLVED Status Popup */}
+      {showResolvedPopup && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-orange-700 mb-4">
+              ⚠️ समाधान जानकारी आवश्यक है
+            </h3>
+            <p className="text-gray-700 mb-4">
+              जब स्थिति "समाधान किया" पर सेट होती है, तो कृपया निम्नलिखित जानकारी भरें:
+            </p>
+            <ul className="list-disc list-inside text-gray-600 mb-4 space-y-1">
+              <li>समाधान टिप्पणियाँ (Resolution Comments)</li>
+              <li>कुल व्यय और आय (Total Expense & Revenue)</li>
+              <li>निरीक्षण (Observation)</li>
+            </ul>
+            <button
+              onClick={handleCloseResolvedPopup}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-semibold"
+            >
+              समझ गया (Got it)
+            </button>
+          </div>
+        </div>
+      )}
+      
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+        <div className="bg-white w-full max-w-6xl rounded-3xl shadow-2xl">
 
         {/* HEADER */}
         <div className="flex justify-between items-center px-6 py-4 bg-green-600 text-white rounded-t-3xl">
@@ -282,8 +383,8 @@ const handleBeejCategoryChange = (e) => {
 
             {/* LEFT */}
             <Card title="📌 घटना विवरण">
-              <Select label="खेत" value={formData.khet} onChange={handleChange("khet")} options={khetOptions} />
-              <Input label="बुआई की तारीख" type="date" value={formData.buwaiDate} onChange={handleChange("buwaiDate")} />
+              <Select label="खेत *" value={formData.khet} onChange={handleChange("khet")} options={khetOptions} required />
+              <Input label="बुआई की तारीख *" type="date" value={formData.buwaiDate} onChange={handleChange("buwaiDate")} required />
               <Input label="संभावित कटाई तारीख" type="date" value={formData.katayiDate} onChange={handleChange("katayiDate")} />
               <Select label="वर्तमान चरण" value={formData.vartman_charan} onChange={handleChange("vartman_charan")} options={charanOptions} />
               <Textarea
@@ -306,13 +407,20 @@ const handleBeejCategoryChange = (e) => {
             {/* RIGHT */}
             <Card title="🌱 फसल विवरण">
               <Input label="रक़बा (एकड़)" value={formData.rakba} onChange={handleChange("rakba")} />
-              <Select label="सीजन" value={formData.season} onChange={handleChange("season")} options={seasonOptions} />
-              <Select label="फसल" value={formData.fasal} onChange={handleChange("fasal")} options={fasalOptions} />
+              <Select label="सीजन *" value={formData.season} onChange={handleChange("season")} options={seasonOptions} required />
+              <Select label="फसल *" value={formData.fasal} onChange={handleChange("fasal")} options={fasalOptions} required />
               <Input
   label="बीज कैटेगरी (English में लिखें)"
   value={formData.beej_category}
   onChange={handleBeejCategoryChange}
 />
+              <Input
+                label="बीज मात्रा (Seed Quantity)"
+                type="number"
+                value={formData.seed_quantity}
+                onChange={handleChange("seed_quantity")}
+                placeholder="बीज की मात्रा दर्ज करें"
+              />
 
               <Select label="स्थिति" value={formData.sthiti} onChange={handleStatusChange} options={sthitiOptions} />
 
@@ -356,7 +464,8 @@ const handleBeejCategoryChange = (e) => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -369,10 +478,15 @@ const Card = ({ title, children }) => (
   </div>
 );
 
-const Input = ({ label, ...props }) => (
+const Input = ({ label, required, ...props }) => (
   <div>
-    {label && <label className="font-medium">{label}</label>}
-    <input {...props} className="w-full border p-2 rounded-xl" />
+    {label && (
+      <label className="font-medium">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+    )}
+    <input {...props} className="w-full border p-2 rounded-xl" required={required} />
   </div>
 );
 
@@ -383,10 +497,15 @@ const Textarea = ({ label, ...props }) => (
   </div>
 );
 
-const Select = ({ label, options, ...props }) => (
+const Select = ({ label, options, required, ...props }) => (
   <div>
-    {label && <label className="font-medium">{label}</label>}
-    <select {...props} className="w-full border p-2 rounded-xl">
+    {label && (
+      <label className="font-medium">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+    )}
+    <select {...props} className="w-full border p-2 rounded-xl" required={required}>
       <option value="">चुनें</option>
       {options.map((o) => (
         <option key={o} value={o}>{o}</option>

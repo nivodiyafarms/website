@@ -1,16 +1,21 @@
-from app.models.user import User
-from app.models.field import Field
-from app.models.crop_catalog import CropCatalog
-from app.models.material import Material
-from app.models.equipment import Equipment
-from app.models.crop_cycle import CropCycle
-from app.models.crop_cycle_note import CropCycleNote
-from app.models.crop_cycle_incident import CropCycleIncident
-from app.models.task import Task
-from app.models.work_order import WorkOrder
-from app.models.work_order_resource import WorkOrderResource
-from app.models.note import Note
-from app.models.general_expense import GeneralExpense
+# backend/app/models/__init__.py
 
-__all__ = ["User", "Field", "CropCatalog", "Material", "Equipment", "CropCycle", "CropCycleNote", "CropCycleIncident", "Task", "WorkOrder", "WorkOrderResource", "Note", "GeneralExpense"]
+from .user import User
+from .field import Field
+from .crop_cycle import CropCycle
+from .task import Task
+from .work_order import WorkOrder
+from .work_order_resource import WorkOrderResource
+from .general_expense import GeneralExpense
+from .note import Note
 
+__all__ = [
+    "User",
+    "Field",
+    "CropCycle",
+    "Task",
+    "WorkOrder",
+    "WorkOrderResource",
+    "GeneralExpense",
+    "Note",
+]

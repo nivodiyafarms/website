@@ -4,10 +4,8 @@ Run this script to populate the database with initial data
 """
 from app.database import SessionLocal, Base, engine
 from app.models.user import User, UserRole, UserLanguage
-from app.models.field import Field, SoilType
+from app.models.field import Field
 from app.models.crop_catalog import CropCatalog
-from app.models.material import Material, MaterialCategory
-from app.models.equipment import Equipment, EquipmentType
 from app.auth.security import get_password_hash
 
 
@@ -62,7 +60,6 @@ def seed_database():
                 field_id="F_001",
                 name="Field 1",
                 area_acre=5.0,
-                soil_type=SoilType.BLACK,
                 gps_centroid_lat=23.515,
                 gps_centroid_lng=78.303,
                 village="Nivodiya"
@@ -71,7 +68,6 @@ def seed_database():
                 field_id="F_002",
                 name="Field 2",
                 area_acre=3.5,
-                soil_type=SoilType.LOAM,
                 gps_centroid_lat=23.516,
                 gps_centroid_lng=78.304,
                 village="Nivodiya"
@@ -80,7 +76,6 @@ def seed_database():
                 field_id="F_003",
                 name="Field 3",
                 area_acre=2.5,
-                soil_type=SoilType.BLACK,
                 gps_centroid_lat=23.517,
                 gps_centroid_lng=78.305,
                 village="Nivodiya"
@@ -116,62 +111,6 @@ def seed_database():
         db.add_all(crops)
         db.commit()
         print("✓ Crop catalog created")
-        
-        # Create Materials
-        materials = [
-            Material(
-                name="Urea",
-                category=MaterialCategory.FERTILIZER,
-                default_unit="kg",
-                safety_notes="Store in dry place. Avoid direct contact with skin."
-            ),
-            Material(
-                name="DAP",
-                category=MaterialCategory.FERTILIZER,
-                default_unit="kg",
-                safety_notes="Handle with care. Use protective equipment."
-            ),
-            Material(
-                name="Chlorpyrifos",
-                category=MaterialCategory.PESTICIDE,
-                default_unit="L",
-                safety_notes="Highly toxic. Use protective equipment. Avoid inhalation."
-            ),
-            Material(
-                name="Mancozeb",
-                category=MaterialCategory.FUNGICIDE,
-                default_unit="kg",
-                safety_notes="Wear gloves and mask during application."
-            ),
-        ]
-        db.add_all(materials)
-        db.commit()
-        print("✓ Materials created")
-        
-        # Create Equipment
-        equipment_list = [
-            Equipment(
-                name="John Deere 5050",
-                type=EquipmentType.TRACTOR,
-                hourly_rate=500.0,
-                plate_no="MP-09-AB-1234"
-            ),
-            Equipment(
-                name="Spray Pump 100L",
-                type=EquipmentType.SPRAYER,
-                hourly_rate=150.0,
-                plate_no=None
-            ),
-            Equipment(
-                name="Water Pump 5HP",
-                type=EquipmentType.PUMP,
-                hourly_rate=200.0,
-                plate_no=None
-            ),
-        ]
-        db.add_all(equipment_list)
-        db.commit()
-        print("✓ Equipment created")
         
         print("\n✅ Database seeded successfully!")
         print("\nTest Credentials:")

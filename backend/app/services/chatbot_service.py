@@ -6,7 +6,7 @@ import json
 from typing import Dict, Any, List, Optional, Tuple
 from groq import Groq
 from app.core.config import settings
-from app.models.task import TaskType, ResourceType
+from app.models.task import ResourceType
 from app.models.work_order import WorkOrderStatus
 from datetime import datetime, timedelta
 
@@ -20,8 +20,8 @@ class ChatbotService:
         self.client = Groq(api_key=self.api_key)
         self.llm_model = "llama-3.3-70b-versatile"
         
-        # Available task types and resource types for validation
-        self.task_types = [t.value for t in TaskType]
+        # Available task categories and resource types for validation
+        self.task_categories = ["sowing", "irrigation", "fertilizer", "harvest", "fuel", "sale", "storage"]
         self.resource_types = [t.value for t in ResourceType]
         self.work_order_statuses = [s.value for s in WorkOrderStatus]
     
@@ -266,13 +266,13 @@ Extract ONLY NEW task information from the user input and return as JSON. Do not
             v = data.get(field)
             if not v:
                 missing_fields.append(field)
-        # Validate task_type (case-insensitive)
-        if data.get("task_type"):
-            normalized_type = str(data["task_type"]).strip().upper()
-            if normalized_type in self.task_types:
-                data["task_type"] = normalized_type
+        # Validate category (case-insensitive)
+        if data.get("category"):
+            normalized_category = str(data["category"]).strip().lower()
+            if normalized_category in self.task_categories:
+                data["category"] = normalized_category
             else:
-                missing_fields.append("task_type")
+                missing_fields.append("category")
         # Validate and clean resources as before ...
         resources = data.get("resources", [])
         if isinstance(resources, list):
@@ -294,7 +294,8 @@ Extract ONLY NEW task information from the user input and return as JSON. Do not
         else:
             cleaned_resources = []
         cleaned_data = {
-            "task_type": data.get("task_type"),
+            "category": data.get("category"),
+            "subcategory": data.get("subcategory"),
             "short_description": data.get("short_description"),
             "description": data.get("description"),
             "assigned_to_id": data.get("assigned_to_id"),
@@ -311,30 +312,26 @@ Extract ONLY NEW task information from the user input and return as JSON. Do not
         return cleaned_data
 
     def _normalize_task_fields(self, data: Dict[str, Any], user_input: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalize task_type from Hindi/synonyms and map assigned_to by name mention."""
+        """Normalize category from Hindi/synonyms and map assigned_to by name mention."""
         normalized = dict(data)
-        # Normalize task_type
-        type_map = {
-            "IRRIGATION": {"irrigation", "इरीगेशन", "इरिगेशन", "सिंचाई", "paani", "पानी"},
-            "FERTILIZER": {"fertilizer", "खाद"},
-            "PESTICIDE": {"pesticide", "कीटनाशक", "दवा", "स्प्रे"},
-            "WEEDING": {"weeding", "निंदाई", "निंदाई", "घासफूस हटाना"},
-            "LABOR": {"labor", "मजदूरी", "मज़दूरी"},
-            "SPRAY": {"spray", "स्प्रे"},
-            "SCOUTING": {"scouting", "निरीक्षण", "जांच"},
-            "TRANSPORT": {"transport", "ढुलाई", "परिवहन"},
-            "HARVEST": {"harvest", "कटाई", "हार्वेस्ट"},
-            "OTHER": {"other", "अन्य"},
+        # Normalize category
+        category_map = {
+            "irrigation": {"irrigation", "इरीगेशन", "इरिगेशन", "सिंचाई", "paani", "पानी"},
+            "fertilizer": {"fertilizer", "खाद"},
+            "harvest": {"harvest", "कटाई", "हार्वेस्ट"},
+            "sowing": {"sowing", "बुआई", "बोना"},
+            "sale": {"sale", "बिक्री", "विक्रय"},
+            "storage": {"storage", "भंडार", "स्टोरेज"},
         }
-        if normalized.get("task_type"):
-            candidate = str(normalized["task_type"]).strip()
-            upper_candidate = candidate.upper()
-            if upper_candidate not in self.task_types:
+        if normalized.get("category"):
+            candidate = str(normalized["category"]).strip()
+            candidate_lower = candidate.lower()
+            if candidate_lower not in self.task_categories:
                 # Try map by synonyms
                 lc = candidate.casefold()
-                for enum_name, variants in type_map.items():
+                for category_name, variants in category_map.items():
                     if lc in {v.casefold() for v in variants}:
-                        normalized["task_type"] = enum_name
+                        normalized["category"] = category_name
                         break
 
         # Map assigned_to_id by name mention if missing
