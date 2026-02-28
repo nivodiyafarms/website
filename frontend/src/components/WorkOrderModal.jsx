@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ClipboardList, Bot } from 'lucide-react';
-import ChatbotModal from './ChatbotModal';
+import { X, ClipboardList } from 'lucide-react';
 import VoiceRecorder from './VoiceRecorder';
 import { transformWorkOrderRequest } from '../utils/apiTransformers';
 
@@ -23,7 +22,6 @@ const WorkOrderModal = ({
   editing = null,
 }) => {
   const [activeTab, setActiveTab] = useState('notes');
-  const [showChatbot, setShowChatbot] = useState(false);
 
   const [formData, setFormData] = useState({
     workOrderId: '',
@@ -158,15 +156,6 @@ const WorkOrderModal = ({
           </div>
 
           <div className="flex gap-3">
-            {!editing && (
-              <button
-                type="button"
-                onClick={() => setShowChatbot(true)}
-                className="bg-blue-600 px-3 py-1 rounded flex gap-2"
-              >
-                <Bot size={18} /> AI
-              </button>
-            )}
             <button type="button" onClick={onClose}>
               <X />
             </button>
@@ -332,16 +321,6 @@ const WorkOrderModal = ({
           </div>
         </div>
       </form>
-
-      {showChatbot && (
-        <ChatbotModal
-          isOpen
-          onClose={() => setShowChatbot(false)}
-          formType="work_order"
-          cropCycleId={cropCycleId}
-          workers={workers}
-        />
-      )}
     </div>
   );
 };

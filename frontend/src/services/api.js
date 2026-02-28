@@ -159,21 +159,4 @@ export const cropCycleAPI = _cropCycleAPI;
 // ✅ Old name (DO NOT REMOVE)
 export const cropCycleIncidentAPI = _cropCycleAPI;
 
-/* ======================
-   CHATBOT  ✅ (RESTORED)
-====================== */
-
-export const chatbotAPI = {
-  sendMessage: (message, conversationId = null) =>
-    api.post("/chatbot/chat", {
-      user_message: message,
-      conversation_id: conversationId,
-    }),
-
-  clearContext: (conversationId) =>
-    api.post("/chatbot/context/clear", {
-      conversation_id: conversationId,
-    }),
-};
-
 export default api;

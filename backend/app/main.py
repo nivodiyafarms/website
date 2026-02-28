@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
 import os
-#from app.api.chatbot import router as chatbot_router
+
 from app.database import engine
 
 # ---------------------------
@@ -94,7 +94,7 @@ app.include_router(work_order_router)
 app.include_router(work_order_resource_router)
 app.include_router(general_expenses_router)
 app.include_router(notes.router)
-#app.include_router(chatbot_router)
+
 # ---------------------------
 # HEALTH
 # ---------------------------
