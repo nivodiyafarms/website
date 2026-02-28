@@ -1,118 +1,179 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import axios from "axios";
 
 const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: "http://localhost:8000/api",
+  headers: { "Content-Type": "application/json" },
 });
 
-// Request interceptor to add JWT token
+/* ======================
+   INTERCEPTORS
+====================== */
+
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("access_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
     }
     return Promise.reject(error);
   }
 );
 
-// Auth APIs
+/* ======================
+   AUTH
+====================== */
+
 export const authAPI = {
-  login: (phone, password) => api.post('/api/auth/login', { phone, password }),
-  getCurrentUser: () => api.get('/api/users/me'),
+  login: (phone, password) =>
+    api.post("/auth/login", { phone, password }),
+  getCurrentUser: () => api.get("/users/me"),
 };
 
-// User APIs
+/* ======================
+   USERS
+====================== */
+
 export const userAPI = {
-  getAll: () => api.get('/api/users/'),
-  create: (userData) => api.post('/api/users/', userData),
+  getAll: () => api.get("/users/"),
+  create: (data) => api.post("/users/", data),
 };
 
-// Field APIs
+/* ======================
+   FIELDS  ✅ (RESTORED)
+====================== */
+
 export const fieldAPI = {
-  getAll: () => api.get('/api/fields/'),
-  getById: (id) => api.get(`/api/fields/${id}`),
-  create: (fieldData) => api.post('/api/fields/', fieldData),
-  update: (id, fieldData) => api.put(`/api/fields/${id}`, fieldData),
-  delete: (id) => api.delete(`/api/fields/${id}`),
+  getAll: () => api.get("/fields/"),
+  getById: (id) => api.get(`/fields/${id}`),
+  create: (data) => api.post("/fields/", data),
+  update: (id, data) => api.put(`/fields/${id}`, data),
+  delete: (id) => api.delete(`/fields/${id}`),
 };
 
-// Crop Cycle APIs
-export const cropCycleAPI = {
-  getAll: () => api.get('/api/crop-cycles/'),
-  getById: (id) => api.get(`/api/crop-cycles/${id}`),
-  create: (cropCycleData) => api.post('/api/crop-cycles/', cropCycleData),
-  update: (id, cropCycleData) => api.put(`/api/crop-cycles/${id}`, cropCycleData),
-  delete: (id) => api.delete(`/api/crop-cycles/${id}`),
-};
+/* ======================
+   CROPS
+====================== */
 
-// Crop APIs
 export const cropAPI = {
-  getAll: () => api.get('/api/crops/'),
+  getAll: () => api.get("/crops/"),
 };
 
-// Material APIs
+/* ======================
+   MATERIALS
+====================== */
+
 export const materialAPI = {
-  getAll: () => api.get('/api/materials/'),
-  create: (materialData) => api.post('/api/materials/', materialData),
+  getAll: () => api.get("/materials/"),
+  create: (data) => api.post("/materials/", data),
 };
 
-// Equipment APIs
+/* ======================
+   EQUIPMENT
+====================== */
+
 export const equipmentAPI = {
-  getAll: () => api.get('/api/equipment/'),
-  create: (equipmentData) => api.post('/api/equipment/', equipmentData),
+  getAll: () => api.get("/equipment/"),
+  create: (data) => api.post("/equipment/", data),
 };
 
-// Crop Cycle Incident APIs
-export const cropCycleIncidentAPI = {
-  // Crop Cycles (Parent)
-  getAllCycles: (params) => api.get('/crop-cycle-incidents/', { params }),
-  getCycleById: (id) => api.get(`/crop-cycle-incidents/${id}`),
-  createCycle: (data) => api.post('/crop-cycle-incidents/', data),
-  updateCycle: (id, data) => api.put(`/crop-cycle-incidents/${id}`, data),
-  deleteCycle: (id) => api.delete(`/crop-cycle-incidents/${id}`),
-  
-  // Tasks (Children)
-  getTasks: (cycleId, params) => api.get(`/crop-cycle-incidents/${cycleId}/tasks`, { params }),
-  getTaskById: (cycleId, taskId) => api.get(`/crop-cycle-incidents/${cycleId}/tasks/${taskId}`),
-  createTask: (cycleId, data) => api.post(`/crop-cycle-incidents/${cycleId}/tasks`, data),
-  updateTask: (cycleId, taskId, data) => api.put(`/crop-cycle-incidents/${cycleId}/tasks/${taskId}`, data),
-  deleteTask: (cycleId, taskId) => api.delete(`/crop-cycle-incidents/${cycleId}/tasks/${taskId}`),
-  uploadVoiceTask: (cycleId, formData) => {
-    return api.post(`/crop-cycle-incidents/${cycleId}/tasks/voice/upload`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-  },
-  
-  // Work Orders
-  getWorkOrders: (cycleId) => api.get(`/crop-cycle-incidents/${cycleId}/work-orders`),
-  getWorkOrderById: (cycleId, orderId) => api.get(`/crop-cycle-incidents/${cycleId}/work-orders/${orderId}`),
-  createWorkOrder: (cycleId, data) => api.post(`/crop-cycle-incidents/${cycleId}/work-orders`, data),
-  updateWorkOrder: (cycleId, orderId, data) => api.put(`/crop-cycle-incidents/${cycleId}/work-orders/${orderId}`, data),
-  deleteWorkOrder: (cycleId, orderId) => api.delete(`/crop-cycle-incidents/${cycleId}/work-orders/${orderId}`),
+/* ======================
+   CROP CYCLES (CORE)
+====================== */
+
+const _cropCycleAPI = {
+  getAllCycles: (params) =>
+    api.get("/crop-cycles/", { params }),
+
+  getCycleById: (id) =>
+    api.get(`/crop-cycles/${id}`),
+
+  getCycleExpenditure: (cycleId) =>
+    api.get(`/crop-cycles/${cycleId}/expenditure`),
+
+  createCycle: (data) =>
+    api.post("/crop-cycles/", data),
+
+  updateCycle: (id, data) =>
+    api.put(`/crop-cycles/${id}`, data),
+
+  deleteCycle: (id) =>
+    api.delete(`/crop-cycles/${id}`),
+
+  // Tasks
+  getTasks: (cycleId) =>
+    api.get(`/crop-cycles/${cycleId}/tasks`),
+
+  createTask: (cycleId, data) =>
+    api.post(`/crop-cycles/${cycleId}/tasks`, data),
+
+  updateTask: (cycleId, taskId, data) =>
+    api.put(`/crop-cycles/${cycleId}/tasks/${taskId}`, data),
+
+  deleteTask: (cycleId, taskId) =>
+    api.delete(`/crop-cycles/${cycleId}/tasks/${taskId}`),
+
+  // Work Orders (Task-level)
+  getWorkOrders: (taskId) =>
+    api.get(`/tasks/${taskId}/work-orders/`),
+
+  createWorkOrder: (taskId, data) =>
+    api.post(`/tasks/${taskId}/work-orders/`, data),
+
+  updateWorkOrder: (taskId, workOrderId, data) =>
+    api.patch(`/tasks/${taskId}/work-orders/${workOrderId}`, data),
+
+  // Work Order Resources
+  getWorkOrderResources: (workOrderId) =>
+    api.get(`/work-orders/${workOrderId}/resources`),
+
+  createWorkOrderResource: (workOrderId, data) =>
+    api.post(`/work-orders/${workOrderId}/resources`, data),
+
+  updateWorkOrderResource: (workOrderId, resourceId, data) =>
+    api.patch(`/work-orders/${workOrderId}/resources/${resourceId}`, data),
+
+  deleteWorkOrderResource: (workOrderId, resourceId) =>
+    api.delete(`/work-orders/${workOrderId}/resources/${resourceId}`),
+};
+
+/* ======================
+   EXPORT ALIASES (CRITICAL)
+====================== */
+
+// ✅ New name
+export const cropCycleAPI = _cropCycleAPI;
+
+// ✅ Old name (DO NOT REMOVE)
+export const cropCycleIncidentAPI = _cropCycleAPI;
+
+/* ======================
+   CHATBOT  ✅ (RESTORED)
+====================== */
+
+export const chatbotAPI = {
+  sendMessage: (message, conversationId = null) =>
+    api.post("/chatbot/chat", {
+      user_message: message,
+      conversation_id: conversationId,
+    }),
+
+  clearContext: (conversationId) =>
+    api.post("/chatbot/context/clear", {
+      conversation_id: conversationId,
+    }),
 };
 
 export default api;
-

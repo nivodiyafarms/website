@@ -1,9 +1,10 @@
+// frontend/src/components/NotesInterface.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Image as ImageIcon, X, Trash2, Mic } from 'lucide-react';
 import api from '../services/api';
 import VoiceRecorder from './VoiceRecorder';
 
-const NotesInterface = ({ cropCycleId }) => {
+const NotesInterface = ({ relatedType, relatedId }) => {
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -16,11 +17,25 @@ const NotesInterface = ({ cropCycleId }) => {
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
     setCurrentUser(user);
-    loadNotes();
-  }, [cropCycleId]);
+    if (relatedType && relatedId) {
+      loadNotes();
+    }
+  }, [relatedType, relatedId]);
 
+  // Track previous notes length to detect new notes
+  const prevNotesLengthRef = useRef(0);
+  
   useEffect(() => {
-    scrollToBottom();
+    // Only auto-scroll when a new note is added (length increases)
+    if (notes.length > prevNotesLengthRef.current) {
+      const timer = setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+      prevNotesLengthRef.current = notes.length;
+      return () => clearTimeout(timer);
+    } else {
+      prevNotesLengthRef.current = notes.length;
+    }
   }, [notes]);
 
   const scrollToBottom = () => {
@@ -29,7 +44,7 @@ const NotesInterface = ({ cropCycleId }) => {
 
   const loadNotes = async () => {
     try {
-      const response = await api.get(`/crop-cycle-notes/${cropCycleId}/notes`);
+      const response = await api.get(`/notes/${relatedType}/${relatedId}`);
       setNotes(response.data);
     } catch (error) {
       console.error('Failed to load notes:', error);
@@ -58,35 +73,40 @@ const NotesInterface = ({ cropCycleId }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!newNote.trim() && !selectedImage) {
+
+    if (!newNote.trim() && !selectedImage) return;
+
+    console.log('NOTE PAYLOAD:', {
+      relatedType,
+      relatedId,
+      text: newNote,
+    });
+
+    if (!relatedType || !relatedId) {
+      alert('Missing context for note');
       return;
     }
 
     setLoading(true);
 
     try {
-      const formData = new FormData();
-      formData.append('content', newNote.trim() || 'Image');
-      formData.append('source', 'web');
-      
-      if (selectedImage) {
-        formData.append('image', selectedImage);
-      }
+      let mediaUrl = null;
 
-      await api.post(`/crop-cycle-notes/${cropCycleId}/notes`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const params = new URLSearchParams();
+      params.set('related_type', relatedType);
+      params.set('related_id', relatedId);
+      params.set('text', newNote.trim() || '');
+
+      if (mediaUrl != null) params.set('media_url', mediaUrl);
+      if (selectedImage) params.set('media_type', 'image');
+
+      await api.post(`/notes/?${params.toString()}`, {});
 
       setNewNote('');
       setSelectedImage(null);
       setImagePreview(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      
+      if (fileInputRef.current) fileInputRef.current.value = '';
+
       loadNotes();
     } catch (error) {
       console.error('Failed to create note:', error);
@@ -96,43 +116,21 @@ const NotesInterface = ({ cropCycleId }) => {
     }
   };
 
-  const handleVoiceRecordingComplete = async (blob) => {
-    try {
-      const formData = new FormData();
-      formData.append('file', blob, 'recording.wav');
-      
-      // Use the voice upload endpoint to transcribe
-      const response = await fetch('http://localhost:8000/crop-cycle-incidents/' + cropCycleId + '/tasks/voice/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-      
-      const result = await response.json();
-      
-      if (result.transcript) {
-        // Append transcript to the existing text in the field
-        setNewNote(prev => (prev + ' ' + result.transcript).trim());
-      }
-    } catch (error) {
-      console.error('Failed to process voice recording:', error);
-      alert('Failed to process voice recording. Please try again.');
-    }
+  const handleVoiceRecordingComplete = async () => {
+    // Voice transcription is context-specific; no universal endpoint here.
+    // Kept for UI; can be wired to a generic transcript API later.
+    setNewNote((prev) => (prev + ' [Voice note]').trim());
   };
 
   const handleDeleteNote = async (noteId) => {
-    if (!window.confirm('Are you sure you want to delete this note?')) {
-      return;
-    }
+    if (!window.confirm('Delete this note?')) return;
 
     try {
-      await api.delete(`/crop-cycle-notes/${cropCycleId}/notes/${noteId}`);
+      await api.delete(`/notes/${noteId}`);
       loadNotes();
     } catch (error) {
-      console.error('Failed to delete note:', error);
-      alert('Failed to delete note');
+      console.error('Delete failed:', error);
+      alert(error?.response?.data?.detail || 'Delete failed');
     }
   };
 
@@ -156,12 +154,6 @@ const NotesInterface = ({ cropCycleId }) => {
     }
   };
 
-  const getImageUrl = (imagePath) => {
-    if (!imagePath) return null;
-    // Adjust this based on your backend configuration
-    return `http://localhost:8000/${imagePath}`;
-  };
-
   return (
     <div className="bg-white rounded-lg shadow flex flex-col h-[600px]">
       {/* Header */}
@@ -180,11 +172,11 @@ const NotesInterface = ({ cropCycleId }) => {
           </div>
         ) : (
           notes.map((note) => {
-            const isCurrentUser = currentUser && note.user_id === currentUser.user_id;
-            
+            const isCurrentUser = currentUser && note.author_id === currentUser.user_id;
+
             return (
               <div
-                key={note.note_id}
+                key={note.id}
                 className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
               >
                 <div
@@ -194,40 +186,40 @@ const NotesInterface = ({ cropCycleId }) => {
                       : 'bg-gray-100 text-gray-900'
                   }`}
                 >
-                  {/* User info */}
-                  {!isCurrentUser && (
+                  {/* User info - optional if backend returns author */}
+                  {!isCurrentUser && note.author_id && (
                     <div className="flex items-center space-x-2 mb-2">
                       <div className="w-6 h-6 rounded-full bg-primary-500 text-white flex items-center justify-center text-xs font-semibold">
-                        {note.user_name ? note.user_name.charAt(0).toUpperCase() : 'U'}
+                        U
                       </div>
-                      <span className="text-xs font-semibold">{note.user_name || 'Unknown'}</span>
+                      <span className="text-xs font-semibold">User</span>
                     </div>
                   )}
 
                   {/* Image */}
-                  {note.image_path && (
+                  {note.media_url && (
                     <div className="mb-2">
                       <img
-                        src={getImageUrl(note.image_path)}
-                        alt="Note attachment"
+                        src={note.media_url}
+                        alt="attachment"
                         className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition"
-                        onClick={() => window.open(getImageUrl(note.image_path), '_blank')}
+                        onClick={() => window.open(note.media_url, '_blank')}
                       />
                     </div>
                   )}
 
                   {/* Content */}
-                  <p className="text-sm whitespace-pre-wrap break-words">{note.content}</p>
+                  <p className="text-sm whitespace-pre-wrap break-words">{note.text}</p>
 
                   {/* Footer */}
                   <div className={`flex items-center justify-between mt-2 text-xs ${
                     isCurrentUser ? 'text-primary-100' : 'text-gray-500'
                   }`}>
                     <span>{formatDate(note.created_at)}</span>
-                    
+
                     {isCurrentUser && (
                       <button
-                        onClick={() => handleDeleteNote(note.note_id)}
+                        onClick={() => handleDeleteNote(note.id)}
                         className="ml-2 hover:text-red-300 transition"
                         title="Delete note"
                       >
@@ -235,15 +227,6 @@ const NotesInterface = ({ cropCycleId }) => {
                       </button>
                     )}
                   </div>
-
-                  {/* Source badge */}
-                  {note.source === 'app' && (
-                    <div className={`mt-2 text-xs ${
-                      isCurrentUser ? 'text-primary-200' : 'text-gray-600'
-                    }`}>
-                      <span className="italic">From mobile app</span>
-                    </div>
-                  )}
                 </div>
               </div>
             );

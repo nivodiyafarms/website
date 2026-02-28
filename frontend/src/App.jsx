@@ -5,14 +5,18 @@ import PrivateRoute from './utils/PrivateRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import CropCycleManagementComplete from './pages/CropCycleManagementComplete';
+import CropCycleManagement from './pages/CropCycleManagement';
+import TaskDetailPage from './pages/TaskDetailPage';
+import GeneralPurpose from './pages/GeneralPurpose';
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+
           <Route path="/login" element={<Login />} />
+
           <Route
             path="/dashboard"
             element={
@@ -23,17 +27,44 @@ function App() {
               </PrivateRoute>
             }
           />
+
           <Route
             path="/crop-cycle-management"
             element={
               <PrivateRoute>
                 <Layout>
-                  <CropCycleManagementComplete />
+                  <CropCycleManagement />
                 </Layout>
               </PrivateRoute>
             }
           />
+
+          {/* Task Detail Page Route */}
+          <Route
+            path="/crop-cycles/:cycleId/tasks/:taskId"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <TaskDetailPage />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+
+          {/* General Purpose AFTER Crop Cycle */}
+          <Route
+            path="/general-purpose"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <GeneralPurpose />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
         </Routes>
       </AuthProvider>
     </BrowserRouter>
@@ -41,4 +72,3 @@ function App() {
 }
 
 export default App;
-

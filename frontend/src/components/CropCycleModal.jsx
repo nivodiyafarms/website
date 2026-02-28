@@ -1,353 +1,515 @@
-import React, { useState, useEffect } from 'react';
-import { X, Mic, FileText } from 'lucide-react';
-import VoiceRecorder from './VoiceRecorder';
+import React, { useState, useEffect } from "react";
+import { X, Mic, Bot } from "lucide-react";
+import { transformCropCycleRequest } from "../utils/apiTransformers";
 
-const CropCycleModal = ({ isOpen, onClose, onSubmit, fields, supervisors, editing = null }) => {
-  const [activeTab, setActiveTab] = useState('manual');
+export default function CropCycleModal({ isOpen, onClose, onSubmit, editing, fields, supervisors }) {
+  const [activeTab, setActiveTab] = useState("Notes");
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
+
   const [formData, setFormData] = useState({
-    field_id: '',
-    crop_name: '',
-    crop_variety: '',
-    sowing_date: '',
-    expected_harvest_date: '',
-    current_stage: 'SOWING',
-    status: 'OPEN',
-    supervisor_id: '',
-    short_description: '',
-    description: '',
-    notes: '',
+    incidentId: "",
+    khet: "",
+    buwaiDate: "",
+    katayiDate: "",
+    vartman_charan: "",
+    varnan: "",
+    season: "",
+    fasal: "",
+    rakba: "",
+    beej_category: "",
+    seed_quantity: "",  // ✅ Added seed_quantity field
+    sthiti: "",
+    status: "",
+    resolvedDate: null,
+    tipanni: "",
+    notes: "",
+    attachment: null,
+    totalExpense: "",
+    totalRevenue: "",
+    profit: "",
+    actualHarvestDate: "",
+    resolutionComments: "",
+    observation: "",
   });
+  
+  const [showResolvedPopup, setShowResolvedPopup] = useState(false);  // ✅ Added popup state
 
+  const isResolutionStatus =
+    formData.sthiti === "समाधान किया" ||
+    formData.sthiti === "रद्द किया गया" ||
+    formData.status === "resolved" ||
+    formData.status === "cancelled";
+
+  // Preload editing data - map backend English fields to Hindi form fields
   useEffect(() => {
-    if (editing) {
+    if (editing && editing.crop_cycle_id) {
       setFormData({
-        field_id: editing.field_id || '',
-        crop_name: editing.crop_name || '',
-        crop_variety: editing.crop_variety || '',
-        sowing_date: editing.sowing_date ? editing.sowing_date.split('T')[0] : '',
-        expected_harvest_date: editing.expected_harvest_date ? editing.expected_harvest_date.split('T')[0] : '',
-        current_stage: editing.current_stage || 'SOWING',
-        status: editing.status || 'OPEN',
-        supervisor_id: editing.supervisor_id || '',
-        short_description: editing.short_description || '',
-        description: editing.description || '',
-        notes: editing.notes || '',
+        khet: editing.field_code || '',
+        fasal: editing.crop_name || '',
+        beej_category: editing.seed_category || '',
+        season: editing.season || '',
+        rakba: editing.cultivated_area || '',
+        seed_quantity: editing.seed_quantity || '',
+        buwaiDate: editing.sowing_date || '',
+        katayiDate: editing.expected_harvest_date || '',
+        vartman_charan: editing.current_stage || '',
+        sthiti: editing.status || '',
+        status: editing.status || '',
+        varnan: editing.description || '',
+        tipanni: editing.resolution_comments || '',
+        notes: editing.observation || '',
+        totalExpense: editing.total_expense || '',
+        totalRevenue: editing.total_revenue || '',
+        profit: editing.profit || '',
+        actualHarvestDate: editing.actual_harvest_date || '',
       });
     }
   }, [editing]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(formData);
+  // --------- ENGLISH → HINDI TRANSLITERATION (BASIC) ----------
+const transliterateToHindi = (text) => {
+  const map = {
+    a: "अ", aa: "आ", i: "इ", ii: "ई", u: "उ", uu: "ऊ",
+    e: "ए", ai: "ऐ", o: "ओ", au: "औ",
+    k: "क", kh: "ख", g: "ग", gh: "घ",
+    ch: "च", j: "ज", t: "त", th: "थ",
+    d: "द", dh: "ध", n: "न",
+    p: "प", ph: "फ", b: "ब", bh: "भ",
+    m: "म", y: "य", r: "र", l: "ल",
+    v: "व", s: "स", h: "ह"
   };
 
-  // Voice recording handler for textareas
-  const handleVoiceRecordingComplete = async (blob, fieldName) => {
-    try {
-      const formData = new FormData();
-      formData.append('file', blob, 'recording.wav');
-      
-      // Use the voice upload endpoint to transcribe
-      const response = await fetch('http://localhost:8000/crop-cycle-incidents/temp/tasks/voice/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-      
-      const result = await response.json();
-      
-      if (result.transcript) {
-        // Append transcript to the existing text in the field
-        setFormData(prev => ({
-          ...prev,
-          [fieldName]: (prev[fieldName] + ' ' + result.transcript).trim()
-        }));
+  return text
+    .toLowerCase()
+    .split(" ")
+    .map(word => {
+      let result = "";
+      let i = 0;
+      while (i < word.length) {
+        if (map[word.slice(i, i + 2)]) {
+          result += map[word.slice(i, i + 2)];
+          i += 2;
+        } else if (map[word[i]]) {
+          result += map[word[i]];
+          i += 1;
+        } else {
+          result += word[i];
+          i += 1;
+        }
       }
-    } catch (error) {
-      console.error('Failed to process voice recording:', error);
-      alert('Failed to process voice recording. Please try again.');
+      return result;
+    })
+    .join(" ");
+};
+
+
+  const handleChange = (key) => (e) =>
+    setFormData((p) => ({ ...p, [key]: e.target.value }));
+  const handleCalcChange = (key) => (e) => {
+  const value = Number(e.target.value) || 0;
+
+  setFormData((p) => {
+    const updated = { ...p, [key]: value };
+
+    const expense =
+      key === "totalExpense" ? value : Number(updated.totalExpense) || 0;
+
+    const revenue =
+      key === "totalRevenue" ? value : Number(updated.totalRevenue) || 0;
+
+    return {
+      ...updated,
+      profit: revenue - expense,
+    };
+  });
+};
+
+const handleBeejCategoryChange = (e) => {
+  const englishText = e.target.value;
+  const hindiText = transliterateToHindi(englishText);
+
+  setFormData((p) => ({
+    ...p,
+    beej_category: hindiText,
+  }));
+};
+
+
+
+  const handleFileUpload = (e) =>
+    setFormData((p) => ({ ...p, attachment: e.target.files[0] }));
+
+  const handleStatusChange = (e) => {
+    const value = e.target.value;
+    setFormData((p) => ({
+      ...p,
+      sthiti: value,
+      resolvedDate:
+        value === "समाधान किया" ? new Date().toISOString() : p.resolvedDate,
+    }));
+    // ✅ Show popup when status changes to RESOLVED
+    if (value === "समाधान किया" || value === "resolved" || value === "RESOLVED") {
+      setShowResolvedPopup(true);
+      setActiveTab("Resolution Information");
     }
   };
+  
+  const handleCloseResolvedPopup = () => {
+    setShowResolvedPopup(false);
+  };
 
-  const stages = [
-    'SOWING', 'GERMINATION', 'VEGETATIVE', 'FLOWERING',
-    'FRUITING', 'HARVEST', 'STORAGE', 'SALE', 'PAYMENT'
+  useEffect(() => {
+    if (formData.sthiti === "समाधान किया" && formData.resolvedDate) {
+      const timer = setInterval(() => {
+        const diff =
+          (new Date() - new Date(formData.resolvedDate)) /
+          (1000 * 60 * 60 * 24);
+        if (diff >= 7 && formData.sthiti !== "पुन: खोला गया") {
+          setFormData((p) => ({ ...p, sthiti: "बंद" }));
+        }
+      }, 3600000);
+      return () => clearInterval(timer);
+    }
+  }, [formData.sthiti, formData.resolvedDate]);
+
+  const handleSubmit = () => {
+    // Validate required fields
+    if (!formData.khet) {
+      alert('Please select a field (खेत)');
+      return;
+    }
+    if (!formData.fasal) {
+      alert('Please enter crop name (फसल)');
+      return;
+    }
+    if (!formData.buwaiDate) {
+      alert('Please select sowing date (बुआई की तारीख)');
+      return;
+    }
+    if (!formData.season) {
+      alert('Please select season (सीजन)');
+      return;
+    }
+
+    // Transform form data from Hindi field names to English backend field names
+    const transformedData = transformCropCycleRequest(formData);
+    
+    // Double-check required fields after transformation
+    if (!transformedData.field_code || !transformedData.crop_name || !transformedData.sowing_date || !transformedData.season) {
+      alert('Missing required fields. Please fill all required fields.');
+      return;
+    }
+
+    if (
+      formData.sthiti === "समाधान किया" ||
+      formData.sthiti === "रद्द किया गया"
+    ) {
+      if (!formData.resolutionComments?.trim()) {
+        alert("समाधान टिप्पणियाँ आवश्यक हैं");
+        return;
+      }
+      if (!formData.totalExpense && formData.totalExpense !== 0) {
+        alert("कुल व्यय आवश्यक है");
+        return;
+      }
+      if (!formData.totalRevenue && formData.totalRevenue !== 0) {
+        alert("कुल आय आवश्यक है");
+        return;
+      }
+      if (!formData.resolvedDate) {
+        alert("समाधान तिथि आवश्यक है");
+        return;
+      }
+    }
+    
+    onSubmit(transformedData);
+  };
+
+  /* ================= OPTIONS ================= */
+  const khetOptions = [
+    "HQ0001","NIB001","NIA001","NID005","NID006","NID001","NID002","NID003",
+    "NID004","NID007","NID008","NID009","BAD010","BAD011","NIA002","NIA003"
   ];
+
+  const seasonOptions = ["खरीफ", "रबी", "जायद"];
+  const fasalOptions = [
+    "सोयाबीन","मक्का","मूंग","गेहू","धान","चना","मसूर","बटरी","तेवरा"
+  ];
+  const charanOptions = [
+    "बुआई","वृद्धि","फूल पर","कटाई","भंडार","बिक्री","भुगतान"
+  ];
+  const sthitiOptions = [
+    "खोलना","समाधान किया","पुन: खोला गया","बंद","रद्द किया गया"
+  ];
+
+  const tabs = [
+    ...(isResolutionStatus ? ["Resolution Information"] : [])
+  ];
+
+  const renderActiveTabContent = () => {
+    if (activeTab === "Resolution Information") {
+      return isResolutionStatus ? (
+        <div className="bg-pink-50 p-6 rounded-2xl border space-y-6">
+          <h3 className="text-lg font-bold text-purple-700">
+            📊 फील्ड समाधान विवरण
+          </h3>
+
+          {/* EXPENSE & REVENUE */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <Input
+              label="कुल व्यय (₹)"
+              type="number"
+              value={formData.totalExpense}
+              onChange={handleCalcChange("totalExpense")}
+              placeholder="कुल खर्च दर्ज करें"
+            />
+
+            <Input
+              label="कुल आय (₹)"
+              type="number"
+              value={formData.totalRevenue}
+              onChange={handleCalcChange("totalRevenue")}
+              placeholder="कुल आय दर्ज करें"
+            />
+          </div>
+
+          {/* PROFIT */}
+          <Input
+            label="लाभ (₹)"
+            type="number"
+            value={formData.profit}
+            disabled
+          />
+
+          {/* DATES */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <Input
+              label="समाधान तिथि"
+              type="date"
+              value={
+                formData.resolvedDate
+                  ? formData.resolvedDate.split("T")[0]
+                  : ""
+              }
+              disabled
+            />
+
+            <Input
+              label="वास्तविक कटाई तिथि"
+              type="date"
+              value={formData.actualHarvestDate}
+              onChange={handleChange("actualHarvestDate")}
+            />
+          </div>
+
+          {/* COMMENTS */}
+          <Textarea
+            label="समाधान टिप्पणियाँ"
+            placeholder="समाधान से संबंधित विवरण लिखें..."
+            value={formData.resolutionComments}
+            onChange={handleChange("resolutionComments")}
+          />
+
+          <Textarea
+            label="निरीक्षण"
+            rows={1}
+            placeholder="निरीक्षण लिखें..."
+            value={formData.observation}
+            onChange={handleChange("observation")}
+          />
+        </div>
+      ) : null;
+    }
+
+    return null;
+  };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-2xl font-bold text-gray-900">
-            {editing ? 'Edit Crop Cycle' : 'Create New Crop Cycle'}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Tabs - Only show for creation, not editing */}
-        {!editing && (
-          <div className="flex border-b">
+    <>
+      {/* ✅ RESOLVED Status Popup */}
+      {showResolvedPopup && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-orange-700 mb-4">
+              ⚠️ समाधान जानकारी आवश्यक है
+            </h3>
+            <p className="text-gray-700 mb-4">
+              जब स्थिति "समाधान किया" पर सेट होती है, तो कृपया निम्नलिखित जानकारी भरें:
+            </p>
+            <ul className="list-disc list-inside text-gray-600 mb-4 space-y-1">
+              <li>समाधान टिप्पणियाँ (Resolution Comments)</li>
+              <li>कुल व्यय और आय (Total Expense & Revenue)</li>
+              <li>निरीक्षण (Observation)</li>
+            </ul>
             <button
-              onClick={() => setActiveTab('manual')}
-              className={`flex-1 flex items-center justify-center space-x-2 px-6 py-4 font-semibold transition ${
-                activeTab === 'manual'
-                  ? 'text-primary-600 border-b-2 border-primary-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
+              onClick={handleCloseResolvedPopup}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-semibold"
             >
-              <FileText className="w-5 h-5" />
-              <span>Manual Entry</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('voice')}
-              className={`flex-1 flex items-center justify-center space-x-2 px-6 py-4 font-semibold transition ${
-                activeTab === 'voice'
-                  ? 'text-primary-600 border-b-2 border-primary-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Mic className="w-5 h-5" />
-              <span>Voice Recording</span>
+              समझ गया (Got it)
             </button>
           </div>
-        )}
+        </div>
+      )}
+      
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+        <div className="bg-white w-full max-w-6xl rounded-3xl shadow-2xl">
 
-        <div className="p-6">
-          {activeTab === 'voice' && !editing ? (
-            <div>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <h3 className="font-semibold text-blue-900 mb-2">🎙️ Voice Recording Tips for Crop Cycle:</h3>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Mention field ID, crop name, and variety</li>
-                  <li>• State sowing date and expected harvest date</li>
-                  <li>• Describe the crop cycle plan</li>
-                  <li>• Example: "Field F_001, wheat crop Lok-1 variety, sowed on October 12th, expecting harvest in April"</li>
-                </ul>
-              </div>
-              <VoiceRecorder onRecordingComplete={(blob) => {/* Handle voice */}} />
+        {/* HEADER */}
+        <div className="flex justify-between items-center px-6 py-4 bg-green-600 text-white rounded-t-3xl">
+          <h2 className="text-xl font-bold">🌾 Incident Form</h2>
+          <button onClick={onClose}><X /></button>
+        </div>
+
+        {/* BODY */}
+        <div className="p-6 space-y-6 max-h-[85vh] overflow-y-auto">
+
+          {/* ID Display (read-only when editing) or info message */}
+          {formData.incidentId ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <label className="text-sm font-medium text-blue-900">Incident ID (Auto-generated)</label>
+              <p className="text-lg font-semibold text-blue-700">{formData.incidentId}</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Field Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Field <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.field_id}
-                    onChange={(e) => setFormData({ ...formData, field_id: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    required
-                  >
-                    <option value="">Select Field</option>
-                    {fields.map((field) => (
-                      <option key={field.field_id} value={field.field_id}>
-                        {field.name} ({field.field_id}) - {field.area_acre} acres
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Crop Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Crop Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.crop_name}
-                    onChange={(e) => setFormData({ ...formData, crop_name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    placeholder="e.g., Wheat, Soybean"
-                    required
-                  />
-                </div>
-
-                {/* Crop Variety */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Crop Variety
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.crop_variety}
-                    onChange={(e) => setFormData({ ...formData, crop_variety: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    placeholder="e.g., Lok-1, JS-335"
-                  />
-                </div>
-
-                {/* Supervisor */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Supervisor <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.supervisor_id}
-                    onChange={(e) => setFormData({ ...formData, supervisor_id: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    required
-                  >
-                    <option value="">Select Supervisor</option>
-                    {supervisors.map((sup) => (
-                      <option key={sup.user_id} value={sup.user_id}>
-                        {sup.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Sowing Date */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Sowing Date <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.sowing_date}
-                    onChange={(e) => setFormData({ ...formData, sowing_date: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    required
-                  />
-                </div>
-
-                {/* Expected Harvest Date */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Expected Harvest Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.expected_harvest_date}
-                    onChange={(e) => setFormData({ ...formData, expected_harvest_date: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  />
-                </div>
-
-                {/* Current Stage */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Current Stage
-                  </label>
-                  <select
-                    value={formData.current_stage}
-                    onChange={(e) => setFormData({ ...formData, current_stage: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  >
-                    {stages.map((stage) => (
-                      <option key={stage} value={stage}>
-                        {stage}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Status */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Status
-                  </label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  >
-                    <option value="OPEN">Open</option>
-                    <option value="CLOSED">Closed</option>
-                  </select>
-                </div>
-
-                {/* Short Description */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Short Description (One-line summary)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.short_description}
-                    onChange={(e) => setFormData({ ...formData, short_description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                    placeholder="Brief summary of this crop cycle"
-                    maxLength="200"
-                  />
-                </div>
-
-                {/* Description */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description (Detailed 5-8 lines)
-                  </label>
-                  <div className="relative">
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                      rows="5"
-                      placeholder="Detailed description of the crop cycle, plans, and expectations..."
-                    ></textarea>
-                    <VoiceRecorder
-                      onRecordingComplete={(blob) => handleVoiceRecordingComplete(blob, 'description')}
-                      customButton={true}
-                      buttonClassName="absolute top-2 right-2 p-2 rounded-lg transition"
-                      iconClassName="w-5 h-5"
-                    />
-                  </div>
-                </div>
-
-                {/* Notes */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes (Free text, misc info)
-                  </label>
-                  <div className="relative">
-                    <textarea
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                      rows="3"
-                      placeholder="Any additional notes, warnings, or miscellaneous information..."
-                    ></textarea>
-                    <VoiceRecorder
-                      onRecordingComplete={(blob) => handleVoiceRecordingComplete(blob, 'notes')}
-                      customButton={true}
-                      buttonClassName="absolute top-2 right-2 p-2 rounded-lg transition"
-                      iconClassName="w-5 h-5"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition font-semibold"
-                >
-                  {editing ? 'Update Crop Cycle' : 'Create Crop Cycle'}
-                </button>
-              </div>
-            </form>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold">Note:</span> ID will be auto-generated (e.g., IN0001)
+              </p>
+            </div>
           )}
+
+          <div className="grid md:grid-cols-2 gap-6">
+
+            {/* LEFT */}
+            <Card title="📌 घटना विवरण">
+              <Select label="खेत *" value={formData.khet} onChange={handleChange("khet")} options={khetOptions} required />
+              <Input label="बुआई की तारीख *" type="date" value={formData.buwaiDate} onChange={handleChange("buwaiDate")} required />
+              <Input label="संभावित कटाई तारीख" type="date" value={formData.katayiDate} onChange={handleChange("katayiDate")} />
+              <Select label="वर्तमान चरण" value={formData.vartman_charan} onChange={handleChange("vartman_charan")} options={charanOptions} />
+              <Textarea
+  label="विवरण"
+  placeholder="विवरण लिखें..."
+  value={formData.tipanni}
+  onChange={handleChange("tipanni")}
+  rows={1}
+/>
+
+              <Textarea
+  label="संक्षिप्त विवरण"
+  placeholder="संक्षिप्त विवरण लिखें..."
+  value={formData.varnan}
+  onChange={handleChange("varnan")}
+/>
+
+            </Card>
+
+            {/* RIGHT */}
+            <Card title="🌱 फसल विवरण">
+              <Input label="रक़बा (एकड़)" value={formData.rakba} onChange={handleChange("rakba")} />
+              <Select label="सीजन *" value={formData.season} onChange={handleChange("season")} options={seasonOptions} required />
+              <Select label="फसल *" value={formData.fasal} onChange={handleChange("fasal")} options={fasalOptions} required />
+              <Input
+  label="बीज कैटेगरी (English में लिखें)"
+  value={formData.beej_category}
+  onChange={handleBeejCategoryChange}
+/>
+              <Input
+                label="बीज मात्रा (Seed Quantity)"
+                type="number"
+                value={formData.seed_quantity}
+                onChange={handleChange("seed_quantity")}
+                placeholder="बीज की मात्रा दर्ज करें"
+              />
+
+              <Select label="स्थिति" value={formData.sthiti} onChange={handleStatusChange} options={sthitiOptions} />
+
+              {formData.sthiti === "रद्द किया गया" && (
+                <p className="text-sm bg-orange-50 border p-2 rounded text-orange-700">
+                  ℹ️ समाधान के 7 दिन बाद स्वतः बंद हो जाएगा
+                </p>
+              )}
+
+              
+            </Card>
+          </div>
+
+          {/* TABS */}
+          <div className="border-t pt-4">
+            <div className="flex gap-6">
+              {tabs.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setActiveTab(t)}
+                  className={
+                    activeTab === t
+                      ? "border-b-2 border-green-600 font-semibold"
+                      : "text-gray-500"
+                  }
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4">{renderActiveTabContent()}</div>
+          </div>
+
+          <div className="text-center">
+            <button
+              onClick={handleSubmit}
+              className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-2xl"
+            >
+              💾 दर्ज करे
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
-};
+}
 
-export default CropCycleModal;
+/* ========= UI COMPONENTS ========= */
 
+const Card = ({ title, children }) => (
+  <div className="bg-gray-50 border rounded-2xl p-4 space-y-3">
+    <h3 className="font-semibold text-green-700">{title}</h3>
+    {children}
+  </div>
+);
 
+const Input = ({ label, required, ...props }) => (
+  <div>
+    {label && (
+      <label className="font-medium">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+    )}
+    <input {...props} className="w-full border p-2 rounded-xl" required={required} />
+  </div>
+);
 
+const Textarea = ({ label, ...props }) => (
+  <div>
+    {label && <label className="font-medium">{label}</label>}
+    <textarea {...props} rows={3} className="w-full border p-2 rounded-xl" />
+  </div>
+);
+
+const Select = ({ label, options, required, ...props }) => (
+  <div>
+    {label && (
+      <label className="font-medium">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+    )}
+    <select {...props} className="w-full border p-2 rounded-xl" required={required}>
+      <option value="">चुनें</option>
+      {options.map((o) => (
+        <option key={o} value={o}>{o}</option>
+      ))}
+    </select>
+  </div>
+);

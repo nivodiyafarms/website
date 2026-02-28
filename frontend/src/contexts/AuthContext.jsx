@@ -6,19 +6,19 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(localStorage.getItem('access_token'));
 
   useEffect(() => {
     // Check if user is logged in on mount
     const initAuth = async () => {
-      const storedToken = localStorage.getItem('token');
+      const storedToken = localStorage.getItem('access_token');
       if (storedToken) {
         try {
           const response = await authAPI.getCurrentUser();
           setUser(response.data);
         } catch (error) {
           console.error('Failed to fetch user:', error);
-          localStorage.removeItem('token');
+          localStorage.removeItem('access_token');
           localStorage.removeItem('user');
         }
       }
@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }) => {
       const response = await authAPI.login(phone, password);
       const { access_token } = response.data;
       
-      localStorage.setItem('token', access_token);
+      localStorage.setItem('access_token', access_token);
       setToken(access_token);
       
       // Fetch user data
@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem('access_token');
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);

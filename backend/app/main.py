@@ -1,55 +1,112 @@
-from fastapi import FastAPI
+# backend/app/main.py
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.database import engine, Base
-from app.api import auth, users, fields, crop_cycles, crops, materials, equipment, crop_cycle_incidents, crop_cycle_notes, chatbot
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from sqlalchemy import text
 import os
+#from app.api.chatbot import router as chatbot_router
+from app.database import engine
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# ---------------------------
+# API ROUTERS (ONLY REAL ONES)
+# ---------------------------
+from app.api.auth import router as auth_router
+from app.api.users import router as users_router
+from app.api.fields import router as fields_router
+from app.api.crop_cycles import router as crop_cycles_router
+from app.api.general_expenses import router as general_expenses_router
+from app.api import notes
+from app.routes.task import router as task_router
+from app.routes.work_order import router as work_order_router
+from app.routes.work_order_resource import router as work_order_resource_router
 
+# ---------------------------
+# REGISTER MODELS (STRICT)
+# ---------------------------
+from app.models.user import User
+from app.models.field import Field
+from app.models.crop_cycle import CropCycle
+from app.models.task import Task
+from app.models.work_order import WorkOrder
+from app.models.work_order_resource import WorkOrderResource
+from app.models.general_expense import GeneralExpense
+from app.models.note import Note
+
+# ---------------------------
+# APP INIT
+# ---------------------------
 app = FastAPI(
-    title="Nivodiya Farms KPI Dashboard API",
-    description="Backend API for Nivodiya Farms management system",
-    version="1.0.0"
+    title="Nivodiya Farms ERP API",
+    description="Backend API for Nivodiya Farms",
+    version="1.0.0",
 )
 
-# CORS configuration - MUST be before static files and routes
+# ---------------------------
+# CORS
+# ---------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # React dev servers
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Mount static files for uploads (images, audio, etc.)
+# ---------------------------
+# EXCEPTION HANDLERS
+# ---------------------------
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    print(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "message": str(exc)},
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"success": False, "errors": exc.errors()},
+    )
+
+# ---------------------------
+# STATIC FILES
+# ---------------------------
 if os.path.exists("uploads"):
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# Include routers
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(fields.router)
-app.include_router(crop_cycles.router)
-app.include_router(crops.router)
-app.include_router(materials.router)
-app.include_router(equipment.router)
-app.include_router(crop_cycle_incidents.router)
-app.include_router(crop_cycle_notes.router)
-app.include_router(chatbot.router)
-
-
+# ---------------------------
+# ROUTES
+# ---------------------------
+app.include_router(auth_router)
+app.include_router(users_router)
+app.include_router(fields_router)
+app.include_router(crop_cycles_router)
+app.include_router(task_router)
+app.include_router(work_order_router)
+app.include_router(work_order_resource_router)
+app.include_router(general_expenses_router)
+app.include_router(notes.router)
+#app.include_router(chatbot_router)
+# ---------------------------
+# HEALTH
+# ---------------------------
 @app.get("/")
 def root():
-    return {
-        "success": True,
-        "message": "Nivodiya Farms API is running",
-        "data": {"version": "1.0.0"}
-    }
-
+    return {"success": True, "message": "Nivodiya Farms API running"}
 
 @app.get("/health")
-def health_check():
-    return {"success": True, "message": "API is healthy"}
-
+def health():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        return {"status": "error", "database": str(e)}

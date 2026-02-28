@@ -1,33 +1,23 @@
-from sqlalchemy import Column, String, Float, DateTime, Text, ForeignKey, Enum as SQLEnum, Integer
+"""
+CropCycleIncident model - Matches crop_cycle_incidents table in database
+Note: There are two tables - crop_cycles and crop_cycle_incidents
+Tasks table references crop_cycle_incidents.incident_id
+"""
+from sqlalchemy import Column, String, DateTime, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
-from datetime import datetime
-import enum
+from sqlalchemy.orm import relationship, foreign
 import uuid
+import enum
+from datetime import datetime
 from app.database import Base
-
-
-class CropStage(str, enum.Enum):
-    SOWING = "SOWING"
-    GERMINATION = "GERMINATION"
-    VEGETATIVE = "VEGETATIVE"
-    FLOWERING = "FLOWERING"
-    FRUITING = "FRUITING"
-    HARVEST = "HARVEST"
-    STORAGE = "STORAGE"
-    SALE = "SALE"
-    PAYMENT = "PAYMENT"
-
-
-class CropCycleStatus(str, enum.Enum):
-    OPEN = "OPEN"
-    CLOSED = "CLOSED"
+from app.models.crop_cycle import CropStage, CropCycleStatus
 
 
 class CropCycleIncident(Base):
     """
-    Parent Incident - Crop Cycle Management
-    Represents the complete lifecycle of a crop from sowing to payment
+    Crop Cycle Incident - Represents a crop cycle incident in the database
+    Matches the crop_cycle_incidents table schema exactly
+    This is the table that tasks reference via foreign key
     """
     __tablename__ = "crop_cycle_incidents"
 
@@ -46,10 +36,10 @@ class CropCycleIncident(Base):
     expected_harvest_date = Column(DateTime, nullable=True)
     
     # Current Status
-    current_stage = Column(SQLEnum(CropStage), nullable=False, default=CropStage.SOWING)
-    status = Column(SQLEnum(CropCycleStatus), nullable=False, default=CropCycleStatus.OPEN)
+    current_stage = Column(String(11), nullable=False)
+    status = Column(String(6), nullable=False)
     
-    # Assignment
+    # Supervisor
     supervisor_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     
     # Descriptions
@@ -62,15 +52,27 @@ class CropCycleIncident(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     closed_at = Column(DateTime, nullable=True)
     
-    # Voice Recording Metadata (for voice-created incidents)
-    is_voice_recorded = Column(String(10), nullable=False, default="false")
+    # Voice recording
+    is_voice_recorded = Column(String(10), nullable=False, default="no")
     audio_file_path = Column(String(500), nullable=True)
     transcript = Column(Text, nullable=True)
     
     # Relationships
-    field = relationship("Field", backref="crop_cycle_incidents")
-    supervisor = relationship("User", foreign_keys=[supervisor_id], backref="supervised_crop_cycles")
-    tasks = relationship("Task", back_populates="crop_cycle", cascade="all, delete-orphan")
-    work_orders = relationship("WorkOrder", back_populates="crop_cycle", cascade="all, delete-orphan")
+    tasks = relationship("Task", foreign_keys="Task.crop_cycle_id", viewonly=True)
+    field = relationship("Field", foreign_keys=[field_id], viewonly=True)
+    supervisor = relationship("User", foreign_keys=[supervisor_id], viewonly=True)
+    
+    # Property aliases for backward compatibility
+    @property
+    def id(self):
+        """Alias for incident_id"""
+        return self.incident_id
+    
+    @property
+    def crop_cycle_id(self):
+        """Alias for incident_id"""
+        return self.incident_id
 
 
+# Export enums for backward compatibility
+__all__ = ["CropCycleIncident", "CropStage", "CropCycleStatus"]

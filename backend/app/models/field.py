@@ -1,15 +1,11 @@
-from sqlalchemy import Column, String, Float, Enum as SQLEnum
+from sqlalchemy import Column, String, Float
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 import enum
 from app.database import Base
 
 
-class SoilType(str, enum.Enum):
-    BLACK = "BLACK"
-    MIX = "MIX"
-    SANDY = "SANDY"
-    LOAM = "LOAM"
+# SoilType enum REMOVED - soil_type column removed from database
 
 
 class OwnershipType(str, enum.Enum):
@@ -23,7 +19,7 @@ class Field(Base):
     field_id = Column(String, primary_key=True)  # e.g., "F_003"
     name = Column(String(64), nullable=False)
     area_acre = Column(Float, nullable=False)
-    soil_type = Column(SQLEnum(SoilType), nullable=True)
+    # soil_type column removed from database
     gps_polygon = Column(JSONB, nullable=True)  # GeoJSON polygon
     gps_centroid_lat = Column(Float, nullable=True)
     gps_centroid_lng = Column(Float, nullable=True)

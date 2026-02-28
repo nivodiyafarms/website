@@ -7,6 +7,7 @@ import json
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List
 from uuid import UUID
+from datetime import datetime
 import os
 import uuid as uuid_lib
 
@@ -15,6 +16,8 @@ from app.auth.security import get_current_user
 from app.models.user import User
 from app.services.chatbot_service import ChatbotService
 from app.services.groq_service import GroqService
+from app.services.openai_chatbot_service import OpenAIChatbotService
+from app.services.openai_service import OpenAIService
 from app.schemas.chatbot import *
 
 router = APIRouter(prefix="/api/chatbot", tags=["Chatbot"])
@@ -80,15 +83,15 @@ def parse_work_order_input(
         # Safe fallback so UI doesn't break completely
         return WorkOrderParseResponse(
             parsed_data={
-                "title": None,
+                "short_description": None,
                 "description": None,
                 "instructions": None,
                 "assigned_to_id": None,
                 "due_date": None,
-                "missing_fields": ["title", "description", "assigned_to_id", "due_date"],
+                "missing_fields": ["short_description", "description", "assigned_to_id", "due_date"],
                 "is_complete": False
             },
-            follow_up_question="Please provide title, description, assignee and due date.",
+            follow_up_question="Please provide short description, description, assignee and due date.",
             is_complete=False
         )
 
@@ -147,16 +150,17 @@ def parse_task_input(
     except Exception as e:
         return TaskParseResponse(
             parsed_data={
-                "task_type": None,
+                "category": None,
+                "subcategory": None,
                 "short_description": None,
                 "description": None,
                 "assigned_to_id": None,
                 "occurred_at": None,
                 "resources": [],
-                "missing_fields": ["task_type", "short_description", "assigned_to_id", "occurred_at"],
+                "missing_fields": ["category", "short_description", "assigned_to_id", "occurred_at"],
                 "is_complete": False
             },
-            follow_up_question="Please provide task type, a short description, assignee, and when it occurred.",
+            follow_up_question="Please provide task category, a short description, assignee, and when it occurred.",
             is_complete=False
         )
 
@@ -250,7 +254,7 @@ def create_work_order_from_chatbot(
         
         # Verify crop cycle exists
         cycle = db.query(CropCycleIncident).filter(
-            CropCycleIncident.incident_id == request.crop_cycle_id
+            CropCycleIncident.id == request.crop_cycle_id
         ).first()
         if not cycle:
             raise HTTPException(status_code=404, detail="Crop cycle not found")
@@ -258,14 +262,14 @@ def create_work_order_from_chatbot(
         # Create work order
         work_order_data = request.form_data
         work_order = WorkOrder(
-            crop_cycle_id=request.crop_cycle_id,
-            title=work_order_data["title"],
-            description=work_order_data["description"],
-            instructions=work_order_data.get("instructions"),
-            assigned_to_id=work_order_data["assigned_to_id"],
+            short_description=work_order_data["short_description"],
+            description=work_order_data.get("description"),
+            assigned_to=work_order_data.get("assigned_to_id"),  # Use assigned_to instead of assigned_to_id
             due_date=work_order_data.get("due_date"),
-            created_by_id=current_user.user_id
+            created_by=current_user.id  # Use created_by instead of created_by_id
         )
+        # Note: Work orders are linked to tasks, not directly to crop cycles
+        # If you need to link to a task, set work_order.task_id
         
         db.add(work_order)
         db.commit()
@@ -289,59 +293,50 @@ def create_task_from_chatbot(
 ):
     """Create task from chatbot data"""
     try:
-        from app.models.task import Task, TaskResource
+        from app.models.task import Task
         from app.models.crop_cycle_incident import CropCycleIncident
         
         # Verify crop cycle exists
         cycle = db.query(CropCycleIncident).filter(
-            CropCycleIncident.incident_id == request.crop_cycle_id
+            CropCycleIncident.id == request.crop_cycle_id
         ).first()
         if not cycle:
             raise HTTPException(status_code=404, detail="Crop cycle not found")
         
         # Create task
         task_data = request.form_data
+        # Use category and subcategory instead of task_type
+        category = task_data.get("category", "other")
+        subcategory = task_data.get("subcategory", "other")
+        if isinstance(category, str):
+            category = category.lower() if category else "other"
+        if isinstance(subcategory, str):
+            subcategory = subcategory.lower() if subcategory else "other"
+        
         task = Task(
             crop_cycle_id=request.crop_cycle_id,
-            task_type=task_data["task_type"],
-            short_description=task_data["short_description"],
+            category=category,  # Use category instead of task_type
+            subcategory=subcategory,  # Use subcategory instead of task_type
+            short_description=task_data.get("short_description", ""),
             description=task_data.get("description"),
-            assigned_to_id=task_data["assigned_to_id"],
-            occurred_at=task_data.get("occurred_at"),
-            labor_count=task_data.get("labor_count"),
-            labor_hours=task_data.get("labor_hours"),
-            outcome_observation=task_data.get("outcome_observation"),
-            gps_lat=task_data.get("gps_lat"),
-            gps_lng=task_data.get("gps_lng"),
-            created_by_id=current_user.user_id
+            assigned_to_id=task_data.get("assigned_to_id", current_user.user_id),  # Required field
+            created_by_id=current_user.user_id,  # Use created_by_id (Task model field)
+            total_expense=sum(r.get("total_cost", 0) for r in task_data.get("resources", []))  # Calculate total_expense directly
         )
-        
-        # Calculate total cost from resources
-        total_cost = sum(r.get("total_cost", 0) for r in task_data.get("resources", []))
-        task.total_cost = total_cost
         
         db.add(task)
         db.flush()
         
-        # Add resources
-        for resource_data in task_data.get("resources", []):
-            resource = TaskResource(
-                task_id=task.task_id,
-                resource_type=resource_data["resource_type"],
-                name=resource_data["name"],
-                quantity=resource_data["quantity"],
-                unit=resource_data["unit"],
-                cost_per_unit=resource_data["cost_per_unit"],
-                total_cost=resource_data["total_cost"]
-            )
-            db.add(resource)
+        # Note: Task resources are not stored directly in the database
+        # Resources are stored in work_order_resources when work orders are created
+        # If resources are provided, they should be associated with a work order instead
         
         db.commit()
         db.refresh(task)
         
         return TaskCreateResponse(
             success=True,
-            task_id=task.task_id,
+            task_id=task.task_id,  # Use task_id (primary key)
             message="Task created successfully"
         )
         
@@ -468,3 +463,140 @@ async def process_voice_input(
         except:
             pass
         raise HTTPException(status_code=500, detail=f"Error processing voice input: {str(e)}")
+
+
+# ============ OpenAI Chatbot Endpoints ============
+
+@router.post("/chat", response_model=ChatResponse)
+def chat_with_bot(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Main chat endpoint using OpenAI GPT-4 with function calling"""
+    try:
+        # Check if OpenAI API key is configured
+        from app.core.config import settings
+        if not settings.OPENAI_API_KEY:
+            raise HTTPException(
+                status_code=400,
+                detail="OpenAI API key is not configured. Please add OPENAI_API_KEY to your .env file."
+            )
+        
+        chatbot_service = OpenAIChatbotService(db)
+        
+        response = chatbot_service.chat(
+            user_message=request.user_message,
+            conversation_id=request.conversation_id,
+            current_user_id=current_user.id
+        )
+        
+        # Ensure all required fields are present
+        if "conversation_id" not in response:
+            response["conversation_id"] = request.conversation_id or f"conv_{datetime.now().timestamp()}"
+        if "language" not in response:
+            response["language"] = "en"
+        if "action_taken" not in response:
+            response["action_taken"] = None
+        if "created_item" not in response:
+            response["created_item"] = None
+        
+        return ChatResponse(**response)
+        
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        import traceback
+        error_msg = str(ve)
+        print(f"ValueError in chat: {error_msg}")
+        print(traceback.format_exc())
+        if "OPENAI_API_KEY" in error_msg:
+            raise HTTPException(
+                status_code=400,
+                detail="OpenAI API key is not configured. Please add OPENAI_API_KEY to your .env file and restart the server."
+            )
+        raise HTTPException(status_code=400, detail=f"Chatbot unavailable: {error_msg}")
+    except Exception as e:
+        import traceback
+        print(f"Error in chat: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error in chat: {str(e)}")
+
+
+@router.post("/voice", response_model=ChatResponse)
+async def chat_with_voice(
+    audio: UploadFile = File(...),
+    conversation_id: str = Form(None),
+    language: str = Form("auto"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Voice input endpoint - transcribes audio and processes with chatbot"""
+    try:
+        # Save audio file
+        audio_id = str(uuid_lib.uuid4())
+        audio_extension = audio.filename.split('.')[-1] if '.' in audio.filename else 'wav'
+        audio_filename = f"{audio_id}.{audio_extension}"
+        audio_path = os.path.join(AUDIO_DIR, audio_filename)
+        
+        with open(audio_path, "wb") as buffer:
+            content = await audio.read()
+            buffer.write(content)
+        
+        # Transcribe audio using OpenAI Whisper
+        try:
+            openai_service = OpenAIService()
+            lang_param = None if language == "auto" else language
+            transcript = openai_service.transcribe_audio(audio_path, lang_param)
+        except Exception as transcribe_error:
+            # Clean up audio file
+            try:
+                os.remove(audio_path)
+            except:
+                pass
+            raise HTTPException(status_code=500, detail=f"Error transcribing audio: {str(transcribe_error)}")
+        
+        # Process transcript with chatbot
+        chatbot_service = OpenAIChatbotService(db)
+        
+        response = chatbot_service.chat(
+            user_message=transcript,
+            conversation_id=conversation_id,
+            current_user_id=current_user.id
+        )
+        
+        # Clean up audio file
+        try:
+            os.remove(audio_path)
+        except:
+            pass
+        
+        return ChatResponse(**response)
+        
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"Chatbot unavailable: {str(ve)}")
+    except Exception as e:
+        # Clean up audio file on error
+        try:
+            if 'audio_path' in locals():
+                os.remove(audio_path)
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=f"Error processing voice input: {str(e)}")
+
+
+@router.post("/context/clear")
+def clear_context(
+    conversation_id: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Clear conversation context"""
+    try:
+        chatbot_service = OpenAIChatbotService(db)
+        chatbot_service.clear_context(conversation_id)
+        return {"success": True, "message": "Context cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing context: {str(e)}")

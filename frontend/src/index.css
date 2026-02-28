@@ -35,3 +35,10 @@ code {
   background: #555;
 }
 
+/* Task Detail Container Styling */
+.task-detail-container {
+  background-color: #fff8e6;
+  border-left: 4px solid #f59e0b;
+  padding: 20px;
+  border-radius: 8px;
+}

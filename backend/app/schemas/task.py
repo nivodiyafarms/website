@@ -1,0 +1,83 @@
+# backend/app/schemas/task.py
+
+from pydantic import BaseModel
+from typing import Optional
+from uuid import UUID
+from datetime import datetime
+
+from app.models.task import (
+    TaskStatus,
+    SeverityLevel,
+    TaskCategory,
+    TaskSubcategory,
+)
+
+
+class TaskCreate(BaseModel):
+    category: Optional[TaskCategory]
+    subcategory: Optional[TaskSubcategory]
+
+    short_description: str
+    description: Optional[str] = None
+
+    assigned_to_id: UUID
+    severity: Optional[SeverityLevel] = None
+
+    model_config = {"from_attributes": True}
+
+
+class TaskUpdate(BaseModel):
+    # Classification
+    category: Optional[TaskCategory] = None
+    subcategory: Optional[TaskSubcategory] = None
+    
+    # Description fields
+    short_description: Optional[str] = None
+    description: Optional[str] = None
+    
+    # Assignment
+    assigned_to_id: Optional[UUID] = None
+    
+    # Status and workflow
+    status: Optional[TaskStatus] = None
+    severity: Optional[SeverityLevel] = None
+    on_hold_reason: Optional[str] = None
+    
+    # Resolution fields
+    resolved_date: Optional[datetime] = None
+    resolution_comments: Optional[str] = None
+    observation: Optional[str] = None
+    
+    # Financial
+    total_expense: Optional[float] = None
+
+    model_config = {"from_attributes": True}
+
+
+class TaskResponse(BaseModel):
+    task_id: UUID
+    crop_cycle_id: UUID
+
+    category: Optional[TaskCategory]
+    subcategory: Optional[TaskSubcategory]
+
+    short_description: str
+    description: Optional[str]
+
+    assigned_to_id: UUID
+    created_by_id: UUID
+
+    status: TaskStatus
+    severity: Optional[SeverityLevel]
+
+    resolved_date: Optional[datetime]
+    resolution_comments: Optional[str]
+    observation: Optional[str]
+
+    total_expense: float
+
+    created_at: datetime
+    updated_at: Optional[datetime]
+    closed_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
