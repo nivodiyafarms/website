@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ClipboardList } from 'lucide-react';
 import VoiceRecorder from './VoiceRecorder';
 import { transformWorkOrderRequest } from '../utils/apiTransformers';
+import API_BASE_URL from '../config/api';
 
 const API_STATUS_TO_MODAL = {
   open: 'New',
@@ -100,7 +101,7 @@ const WorkOrderModal = ({
       fd.append('file', blob, 'recording.wav');
 
       const res = await fetch(
-        `http://localhost:8000/crop-cycle-incidents/${cropCycleId}/tasks/voice/upload`,
+        `${API_BASE_URL}/api/crop-cycle-incidents/${cropCycleId}/tasks/voice/upload`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
