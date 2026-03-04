@@ -226,10 +226,12 @@ const handleBeejCategoryChange = (e) => {
   };
 
   /* ================= OPTIONS ================= */
-  const khetOptions = [
-    "HQ0001","NIB001","NIA001","NID005","NID006","NID001","NID002","NID003",
-    "NID004","NID007","NID008","NID009","BAD010","BAD011","NIA002","NIA003"
-  ];
+  const khetOptions = (fields || [])
+    .sort((a, b) => (a.field_id || "").localeCompare(b.field_id || ""))
+    .map((f) => ({
+      value: f.field_id,
+      label: `${f.field_id} - ${f.name || f.field_id}`,
+    }));
 
   const seasonOptions = ["खरीफ", "रबी", "जायद"];
   const fasalOptions = [
@@ -383,7 +385,25 @@ const handleBeejCategoryChange = (e) => {
 
             {/* LEFT */}
             <Card title="📌 घटना विवरण">
-              <Select label="खेत *" value={formData.khet} onChange={handleChange("khet")} options={khetOptions} required />
+              <div>
+                <label className="font-medium">
+                  खेत * <span className="text-red-500 ml-1">*</span>
+                </label>
+                <select
+                  name="khet"
+                  value={formData.khet}
+                  onChange={handleChange("khet")}
+                  className="w-full border p-2 rounded-xl"
+                  required
+                >
+                  <option value="">चुनें</option>
+                  {khetOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <Input label="बुआई की तारीख *" type="date" value={formData.buwaiDate} onChange={handleChange("buwaiDate")} required />
               <Input label="संभावित कटाई तारीख" type="date" value={formData.katayiDate} onChange={handleChange("katayiDate")} />
               <Select label="वर्तमान चरण" value={formData.vartman_charan} onChange={handleChange("vartman_charan")} options={charanOptions} />
