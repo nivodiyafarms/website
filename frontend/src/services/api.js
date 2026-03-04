@@ -4,6 +4,7 @@ import API_BASE_URL from "../config/api";
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
   headers: { "Content-Type": "application/json" },
+  timeout: 60000,
 });
 
 /* ======================
@@ -24,7 +25,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Logout only on actual 401 (invalid/expired token). Not on network error or timeout.
+    if (error.response && error.response.status === 401) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("user");
       window.location.href = "/login";
