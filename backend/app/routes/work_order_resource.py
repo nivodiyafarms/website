@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 from uuid import UUID
 from decimal import Decimal
@@ -8,6 +9,7 @@ from app.database import get_db
 from app.auth.security import get_current_user
 from app.models.work_order import WorkOrder
 from app.models.work_order_resource import WorkOrderResource
+from app.models.task import Task
 from app.models.user import User
 from app.schemas.work_order_resource import (
     WorkOrderResourceCreate,
@@ -19,6 +21,20 @@ router = APIRouter(
     prefix="/api/work-orders",
     tags=["Work Order Resources"]
 )
+
+
+def recalculate_task_total_expense(db: Session, task_id: UUID) -> None:
+    """Set task.total_expense to SUM(resource.cost) for all resources of the task's work orders."""
+    total = (
+        db.query(func.coalesce(func.sum(WorkOrderResource.cost), 0))
+        .select_from(WorkOrderResource)
+        .join(WorkOrder, WorkOrderResource.work_order_id == WorkOrder.work_order_id)
+        .filter(WorkOrder.task_id == task_id)
+        .scalar()
+    )
+    task = db.query(Task).filter(Task.task_id == task_id).first()
+    if task:
+        task.total_expense = total
 
 
 @router.post("/{work_order_id}/resources",
@@ -58,6 +74,8 @@ def add_resource(
     )
 
     db.add(res)
+    db.flush()  # make new resource visible to SUM query in same transaction
+    recalculate_task_total_expense(db, wo.task_id)
     db.commit()
     db.refresh(res)
     return res
@@ -90,6 +108,9 @@ def update_resource(
     if res.rate is not None and res.qty is not None:
         res.cost = Decimal(str(res.qty)) * Decimal(str(res.rate))
 
+    wo = db.query(WorkOrder).filter(WorkOrder.work_order_id == work_order_id).first()
+    if wo:
+        recalculate_task_total_expense(db, wo.task_id)
     db.commit()
     db.refresh(res)
     return res
@@ -112,7 +133,11 @@ def delete_resource(
     )
     if not res:
         raise HTTPException(status_code=404, detail="Work order resource not found")
+    wo = db.query(WorkOrder).filter(WorkOrder.work_order_id == work_order_id).first()
+    task_id = wo.task_id if wo else None
     db.delete(res)
+    if task_id:
+        recalculate_task_total_expense(db, task_id)
     db.commit()
     return None
 

@@ -185,7 +185,9 @@ const TaskDetailPage = () => {
         on_hold_reason: foundTask.on_hold_reason || "",
         opened_by: foundTask.opened_by || foundTask.assigned_to_id || "",
         opened_date: foundTask.opened_date ? String(foundTask.opened_date).split("T")[0] : new Date().toISOString().split("T")[0],
-        resolved_date: foundTask.resolved_date || null,
+        resolved_date: foundTask.resolved_date
+          ? String(foundTask.resolved_date).split("T")[0]
+          : null,
       });
 
       // Set work orders
