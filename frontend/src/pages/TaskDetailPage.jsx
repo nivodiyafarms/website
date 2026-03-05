@@ -489,9 +489,9 @@ const TaskDetailPage = () => {
                       </label>
                       <input
                         type="date"
-                        value={formData?.resolved_date ? new Date(formData.resolved_date).toISOString().split('T')[0] : ""}
+                        value={form.resolved_date || ""}
+                        onChange={(e) => handleChange("resolved_date", e.target.value)}
                         className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                        readOnly
                       />
                     </div>
                   )}
