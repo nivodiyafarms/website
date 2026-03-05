@@ -6,6 +6,7 @@ from typing import List
 from uuid import UUID
 from app.database import get_db
 from app.models.crop_cycle import CropCycle, CropCycleStatus
+from app.models.task import Task
 from app.models.user import User
 from app.schemas.crop_cycle import CropCycleCreate, CropCycleUpdate, CropCycleResponse
 from app.auth.security import get_current_user
@@ -117,7 +118,21 @@ def update_crop_cycle(
                 status_code=400,
                 detail="Resolution comments required"
             )
-    
+
+    if status_val == "resolved":
+        open_tasks = (
+            db.query(Task)
+            .filter(Task.crop_cycle_id == crop_cycle_id)
+            .filter(~Task.status.in_(["resolved", "cancelled"]))
+            .limit(1)
+            .all()
+        )
+        if open_tasks:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot resolve crop cycle while tasks are still open."
+            )
+
     # Auto-set resolved_date if status is RESOLVED and date not provided
     if str(update_data.get("status", "")).lower() == "resolved":
         if not update_data.get("resolved_date"):

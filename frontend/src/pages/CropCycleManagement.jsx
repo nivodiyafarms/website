@@ -130,7 +130,8 @@ const CropCycleManagement = () => {
       }
     } catch (err) {
       console.error("BACKEND ERROR FULL RESPONSE:", err.response?.data);
-      alert(JSON.stringify(err.response?.data));
+      const detail = err.response?.data?.detail;
+      alert(typeof detail === "string" ? detail : JSON.stringify(err.response?.data || err.message));
     }
   };
 
@@ -314,7 +315,7 @@ const CropCycleManagement = () => {
               <span className={`px-4 py-1 rounded-full text-sm font-semibold ${getStatusColor(selectedCycle.status)}`}>
                 {selectedCycle.status}
               </span>
-              {["open", "reopened"].includes(
+              {["open", "reopened", "resolved"].includes(
                 selectedCycle.status?.toLowerCase()
               ) && (
                 <button
@@ -327,6 +328,28 @@ const CropCycleManagement = () => {
                   title="Edit crop cycle"
                 >
                   <Edit className="w-5 h-5" />
+                </button>
+              )}
+              {selectedCycle.status?.toLowerCase() === "resolved" && (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await cropCycleAPI.updateCycle(selectedCycle.crop_cycle_id, { status: "reopened" });
+                      if (viewMode === "cycle-detail") {
+                        loadCycleDetail(selectedCycle.crop_cycle_id);
+                      } else {
+                        loadCropCycles();
+                      }
+                    } catch (err) {
+                      console.error("Reopen failed:", err);
+                      alert(err.response?.data?.detail || err.message || "Failed to reopen");
+                    }
+                  }}
+                  className="text-amber-600 hover:text-amber-800 font-medium text-sm"
+                  title="Reopen crop cycle"
+                >
+                  पुनः खोलें
                 </button>
               )}
             </div>

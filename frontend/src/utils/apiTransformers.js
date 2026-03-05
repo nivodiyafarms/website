@@ -144,11 +144,6 @@ export function transformCropCycleRequest(data) {
   if (hasValue(data.varnan)) out.short_description = data.varnan;
   if (hasValue(data.tipanni)) out.description = data.tipanni;
 
-  // Full description
-  if (hasValue(data.varnan)) {
-    out.description = data.varnan;
-  }
-
   // Short description
   if (hasValue(data.short_description)) {
     out.short_description = data.short_description;
