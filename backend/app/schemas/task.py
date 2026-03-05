@@ -56,6 +56,7 @@ class TaskUpdate(BaseModel):
 
 class TaskResponse(BaseModel):
     task_id: UUID
+    task_number: Optional[str] = None
     crop_cycle_id: UUID
 
     category: Optional[TaskCategory]
