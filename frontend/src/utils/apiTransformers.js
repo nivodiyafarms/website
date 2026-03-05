@@ -325,6 +325,30 @@ export function transformTaskRequest(data) {
     out.severity = String(data.severity).toLowerCase();
   }
 
+  // TaskUpdate-only fields (included when present; create endpoint ignores extra fields)
+  const statusValue = String(data.status || "").toLowerCase();
+  if (hasValue(data.status)) {
+    out.status = statusValue;
+  }
+  if (hasValue(data.on_hold_reason)) {
+    out.on_hold_reason = data.on_hold_reason;
+  }
+  if (hasValue(data.resolution_comments)) {
+    out.resolution_comments = data.resolution_comments;
+  }
+  if (hasValue(data.observation)) {
+    out.observation = data.observation;
+  }
+  // resolved_date: only include when it has a value; if status is "resolved" and null/empty, omit so backend auto-sets
+  const resolvedDateValue = data.resolved_date;
+  const hasResolvedDate = resolvedDateValue !== undefined && resolvedDateValue !== null && resolvedDateValue !== "";
+  if (hasResolvedDate) {
+    const dateOnly = String(resolvedDateValue).split("T")[0];
+    if (dateOnly) out.resolved_date = dateOnly;
+  } else if (statusValue === "resolved") {
+    // Do not send resolved_date so backend auto-sets it
+  }
+
   // Remove fields NOT in TaskCreate schema:
   // - task_id (auto-generated)
   // - opened_by (already mapped to assigned_to_id)
@@ -333,7 +357,6 @@ export function transformTaskRequest(data) {
   // - expected_resolution_date (not in schema)
   // - resolution_notes (not in schema)
   // - update_notes (not in schema)
-  // - status (handled in TaskUpdate, not TaskCreate)
 
   console.log("✅ Task Payload (Hindi → English):", out);
   return out;

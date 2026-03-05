@@ -305,7 +305,7 @@ const TaskDetailPage = () => {
   }
 
   const currentStatusIndex = STATUS_FLOW.findIndex(s => s.value === form.status);
-  const isResolved = form.status === "resolved";
+  const showResolutionBlock = form.status === "resolved" || form.status === "cancelled";
 
   const formData = isCreateMode ? form : task;
   const filteredSubCategories = ALL_SUBCATEGORIES.filter(
@@ -475,48 +475,54 @@ const TaskDetailPage = () => {
                 </div>
               </div>
 
-              {/* Resolution Section - Only when resolved */}
-              {isResolved && (
-                <div className="bg-green-50 border border-green-200 p-4 rounded-lg space-y-4">
-                  <h3 className="font-semibold text-green-800">समाधान विवरण</h3>
+              {/* Resolution / Closure Section - when resolved or cancelled */}
+              {showResolutionBlock && (
+                <div className={form.status === "cancelled" ? "bg-red-50 border border-red-200 p-4 rounded-lg space-y-4" : "bg-green-50 border border-green-200 p-4 rounded-lg space-y-4"}>
+                  <h3 className={form.status === "cancelled" ? "font-semibold text-red-800" : "font-semibold text-green-800"}>
+                    {form.status === "cancelled" ? "रद्द करने का कारण" : "समाधान विवरण"}
+                  </h3>
                   
-                  <div>
-                    <label className="font-semibold text-gray-700 block mb-2">
-                      वास्तविक समाधान तिथि
-                    </label>
-                    <input
-                      type="date"
-                      value={formData?.resolved_date ? new Date(formData.resolved_date).toISOString().split('T')[0] : ""}
-                      className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                      readOnly
-                    />
-                  </div>
+                  {form.status !== "cancelled" && (
+                    <div>
+                      <label className="font-semibold text-gray-700 block mb-2">
+                        वास्तविक समाधान तिथि
+                      </label>
+                      <input
+                        type="date"
+                        value={formData?.resolved_date ? new Date(formData.resolved_date).toISOString().split('T')[0] : ""}
+                        className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        readOnly
+                      />
+                    </div>
+                  )}
 
                   <div>
                     <label className="font-semibold text-gray-700 block mb-2">
-                      समाधान टिप्पणियाँ
+                      {form.status === "cancelled" ? "रद्द करने का कारण / टिप्पणियाँ" : "समाधान टिप्पणियाँ"}
                     </label>
                     <textarea
-                      value={form.resolution_comments}
+                      value={form.resolution_comments || ""}
                       onChange={(e) => handleChange("resolution_comments", e.target.value)}
                       className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                       rows={4}
-                      placeholder="समाधान टिप्पणियाँ दर्ज करें..."
+                      placeholder={form.status === "cancelled" ? "रद्द करने का कारण दर्ज करें..." : "समाधान टिप्पणियाँ दर्ज करें..."}
                     />
                   </div>
 
-                  <div>
-                    <label className="font-semibold text-gray-700 block mb-2">
-                      निरीक्षण टिप्पणी
-                    </label>
-                    <textarea
-                      value={form.observation}
-                      onChange={(e) => handleChange("observation", e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                      rows={4}
-                      placeholder="निरीक्षण टिप्पणी दर्ज करें..."
-                    />
-                  </div>
+                  {form.status !== "cancelled" && (
+                    <div>
+                      <label className="font-semibold text-gray-700 block mb-2">
+                        निरीक्षण टिप्पणी
+                      </label>
+                      <textarea
+                        value={form.observation || ""}
+                        onChange={(e) => handleChange("observation", e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        rows={4}
+                        placeholder="निरीक्षण टिप्पणी दर्ज करें..."
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
