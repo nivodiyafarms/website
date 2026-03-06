@@ -51,7 +51,7 @@ function App() {
             }
           />
 
-          {/* General Purpose AFTER Crop Cycle */}
+          {/* General Expense AFTER Crop Cycle */}
           <Route
             path="/general-purpose"
             element={

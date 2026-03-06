@@ -27,6 +27,7 @@ const initialForm = {
   category: "",
   subcategory: "",
   description: "",
+  notes: "",
   date: "",
   qty: "",
   unit: "",
@@ -81,6 +82,7 @@ export default function GeneralPurpose() {
       category: expense.category ?? "",
       subcategory: expense.subcategory ?? "",
       description: expense.description ?? "",
+      notes: expense.notes ?? "",
       date: expense.date ?? "",
       qty: expense.qty != null ? String(expense.qty) : "",
       unit: expense.unit ?? "",
@@ -110,6 +112,7 @@ export default function GeneralPurpose() {
         category: form.category,
         subcategory: form.subcategory || null,
         description: form.description,
+        notes: form.notes || null,
         date: form.date || null,
         qty: Number(form.qty),
         unit: form.unit,
@@ -298,6 +301,17 @@ export default function GeneralPurpose() {
                   className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-primary-500"
                   rows={2}
                   placeholder="विवरण (वैकल्पिक)"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-sm font-medium block mb-1">Notes</label>
+                <textarea
+                  value={form.notes || ""}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  rows={2}
+                  placeholder="Notes (optional)"
                 />
               </div>
 

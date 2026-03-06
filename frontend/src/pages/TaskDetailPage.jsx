@@ -687,7 +687,7 @@ const TaskDetailPage = () => {
           />
           
           {/* Drawer */}
-          <div className="fixed right-0 top-0 bottom-0 w-[400px] bg-white shadow-2xl z-50 overflow-y-auto">
+          <div className="fixed right-0 top-0 bottom-0 w-[600px] bg-white shadow-2xl z-50 overflow-y-auto">
             {/* Drawer Header */}
             <div className="flex justify-between items-center px-6 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white border-b">
               <div>

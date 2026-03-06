@@ -17,7 +17,7 @@ const Layout = ({ children }) => {
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/crop-cycle-management', icon: Wheat, label: 'Crop Cycles', badge: 'NEW' },
-    { path: '/general-purpose', icon: FileText, label: 'General Purpose' },
+    { path: '/general-purpose', icon: FileText, label: 'General Expense' },
   ];
 
   const isActive = (path) => location.pathname === path;
