@@ -921,6 +921,7 @@ const TaskDetailPage = () => {
                                               resource.work_order_resources_id
                                             );
                                             await loadResources(activeWorkOrder.work_order_id);
+                                            await loadTaskData();
                                           } catch (err) {
                                             console.error("Failed to delete resource:", err);
                                             alert(err.response?.data?.detail || "संसाधन हटाने में विफल");
@@ -1197,6 +1198,7 @@ const TaskDetailPage = () => {
 
                         // Reload resources
                         await loadResources(activeWorkOrder.work_order_id);
+                        await loadTaskData();
 
                         // Close modal and reset form
                         setShowAddResourceModal(false);
