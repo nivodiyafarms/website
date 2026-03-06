@@ -466,7 +466,7 @@ const CropCycleManagement = () => {
                             <FileText className="w-4 h-4 mr-1" />
                             {task.task_type}
                           </span>
-                          <span>₹{(task.total_cost || 0).toLocaleString()}</span>
+                          <span>₹{(task.total_expense ?? 0).toLocaleString()}</span>
                           {task.occurred_at && (
                             <span>{new Date(task.occurred_at).toLocaleDateString()}</span>
                           )}
