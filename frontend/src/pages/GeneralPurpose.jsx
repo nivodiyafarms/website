@@ -210,7 +210,7 @@ export default function GeneralPurpose() {
         </table>
       </div>
 
-      {showExpenseNotes && selectedExpense && (
+      {showExpenseNotes && selectedExpense?.general_expense_id && (
         <div className="mt-6 border-t border-gray-200 pt-4">
           <NotesInterface relatedType="expense" relatedId={selectedExpense.general_expense_id} />
         </div>
