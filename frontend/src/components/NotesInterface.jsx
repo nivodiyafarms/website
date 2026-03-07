@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Image as ImageIcon, X, Trash2, Mic } from 'lucide-react';
 import api from '../services/api';
 import VoiceRecorder from './VoiceRecorder';
+import { supabase } from '../lib/supabase';
 
 const NotesInterface = ({ relatedType, relatedId }) => {
   const [notes, setNotes] = useState([]);
@@ -51,6 +52,20 @@ const NotesInterface = ({ relatedType, relatedId }) => {
     }
   };
 
+  const compressImage = async (file) => {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const MAX_WIDTH = 1600;
+    const scale = Math.min(MAX_WIDTH / bitmap.width, 1);
+    canvas.width = bitmap.width * scale;
+    canvas.height = bitmap.height * scale;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return new Promise((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.7);
+    });
+  };
+
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -76,12 +91,6 @@ const NotesInterface = ({ relatedType, relatedId }) => {
 
     if (!newNote.trim() && !selectedImage) return;
 
-    console.log('NOTE PAYLOAD:', {
-      relatedType,
-      relatedId,
-      text: newNote,
-    });
-
     if (!relatedType || !relatedId) {
       alert('Missing context for note');
       return;
@@ -92,11 +101,31 @@ const NotesInterface = ({ relatedType, relatedId }) => {
     try {
       let mediaUrl = null;
 
+      if (selectedImage) {
+        if (!supabase) {
+          alert('Image upload is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+          setLoading(false);
+          return;
+        }
+        const compressed = await compressImage(selectedImage);
+        const sanitized = (selectedImage.name || 'image').replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filePath = `notes/${Date.now()}_${sanitized}.jpg`;
+        const { error } = await supabase.storage
+          .from('images')
+          .upload(filePath, compressed, { contentType: 'image/jpeg' });
+        if (error) {
+          alert('Image upload failed: ' + error.message);
+          setLoading(false);
+          return;
+        }
+        const { data } = supabase.storage.from('images').getPublicUrl(filePath);
+        mediaUrl = data.publicUrl;
+      }
+
       const params = new URLSearchParams();
       params.set('related_type', relatedType);
       params.set('related_id', relatedId);
       params.set('text', newNote.trim() || '');
-
       if (mediaUrl != null) params.set('media_url', mediaUrl);
       if (selectedImage) params.set('media_type', 'image');
 
@@ -202,7 +231,7 @@ const NotesInterface = ({ relatedType, relatedId }) => {
                       <img
                         src={note.media_url}
                         alt="attachment"
-                        className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition"
+                        className="mt-2 rounded-md max-h-60 object-contain cursor-pointer hover:opacity-90 transition"
                         onClick={() => window.open(note.media_url, '_blank')}
                       />
                     </div>
