@@ -211,8 +211,35 @@ export default function GeneralPurpose() {
       </div>
 
       {showExpenseNotes && selectedExpense?.general_expense_id && (
-        <div className="mt-6 border-t border-gray-200 pt-4">
-          <NotesInterface relatedType="expense" relatedId={selectedExpense.general_expense_id} />
+        <div className="mt-6 border border-gray-200 rounded-lg p-4 bg-gray-50">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="font-semibold text-gray-900">
+                Notes for: {selectedExpense.category}
+                {selectedExpense.subcategory ? ` — ${selectedExpense.subcategory}` : ""}
+              </h3>
+              <p className="text-sm text-gray-600">
+                ₹ {selectedExpense.total_cost != null
+                  ? Number(selectedExpense.total_cost).toLocaleString()
+                  : "0"}
+                {selectedExpense.date ? ` • ${selectedExpense.date}` : ""}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowExpenseNotes(false);
+                setSelectedExpense(null);
+              }}
+              className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+            >
+              Close
+            </button>
+          </div>
+          <NotesInterface
+            relatedType="expense"
+            relatedId={selectedExpense.general_expense_id}
+          />
         </div>
       )}
 
