@@ -65,6 +65,14 @@ const CropCycleManagement = () => {
     }
   };
 
+  // Match dropdown format: "FIELD_CODE - FIELD_NAME"
+  const getFieldDisplayLabel = (fieldCode) => {
+    if (!fieldCode) return '';
+    const field = fields.find((f) => (f.field_id || f.field_code) === fieldCode);
+    if (field) return `${field.field_id || field.field_code || fieldCode} - ${field.name || field.field_id || fieldCode}`;
+    return fieldCode;
+  };
+
   const loadCycleDetail = async (id) => {
     setLoading(true);
     try {
@@ -77,9 +85,10 @@ const CropCycleManagement = () => {
       setSelectedCycle(cycle);
       setTasks(taskList);
       setViewMode('cycle-detail');
+      const fieldLabel = getFieldDisplayLabel(cycle.field_code) || cycle.field_code;
       setBreadcrumb([
         { name: 'Crop Cycles', id: null },
-        { name: `${cycle.crop_name} - ${cycle.field_code}`, id: id }
+        { name: `${cycle.crop_name} - ${fieldLabel}`, id: id }
       ]);
     } catch (error) {
       console.error('Failed to load cycle details:', error);
@@ -235,7 +244,7 @@ const CropCycleManagement = () => {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">{cycle.crop_name}</h3>
-                  <p className="text-sm text-gray-600">{cycle.field_code} • {cycle.seed_category || 'No variety'}</p>
+                  <p className="text-sm text-gray-600">{getFieldDisplayLabel(cycle.field_code) || cycle.field_code} • {cycle.seed_category || 'No variety'}</p>
                 </div>
                 <span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(cycle.status)}`}>
                   {cycle.status}
@@ -307,7 +316,7 @@ const CropCycleManagement = () => {
                 {selectedCycle.seed_category && ` - ${selectedCycle.seed_category}`}
               </h1>
               <p className="text-sm text-gray-500 mt-1">
-                Field {selectedCycle.field_code}
+                {getFieldDisplayLabel(selectedCycle.field_code) || selectedCycle.field_code}
               </p>
             </div>
 

@@ -66,43 +66,6 @@ export default function CropCycleModal({ isOpen, onClose, onSubmit, editing, fie
     }
   }, [editing]);
 
-  // --------- ENGLISH → HINDI TRANSLITERATION (BASIC) ----------
-const transliterateToHindi = (text) => {
-  const map = {
-    a: "अ", aa: "आ", i: "इ", ii: "ई", u: "उ", uu: "ऊ",
-    e: "ए", ai: "ऐ", o: "ओ", au: "औ",
-    k: "क", kh: "ख", g: "ग", gh: "घ",
-    ch: "च", j: "ज", t: "त", th: "थ",
-    d: "द", dh: "ध", n: "न",
-    p: "प", ph: "फ", b: "ब", bh: "भ",
-    m: "म", y: "य", r: "र", l: "ल",
-    v: "व", s: "स", h: "ह"
-  };
-
-  return text
-    .toLowerCase()
-    .split(" ")
-    .map(word => {
-      let result = "";
-      let i = 0;
-      while (i < word.length) {
-        if (map[word.slice(i, i + 2)]) {
-          result += map[word.slice(i, i + 2)];
-          i += 2;
-        } else if (map[word[i]]) {
-          result += map[word[i]];
-          i += 1;
-        } else {
-          result += word[i];
-          i += 1;
-        }
-      }
-      return result;
-    })
-    .join(" ");
-};
-
-
   const handleChange = (key) => (e) =>
     setFormData((p) => ({ ...p, [key]: e.target.value }));
   const handleCalcChange = (key) => (e) => {
@@ -123,18 +86,6 @@ const transliterateToHindi = (text) => {
     };
   });
 };
-
-const handleBeejCategoryChange = (e) => {
-  const englishText = e.target.value;
-  const hindiText = transliterateToHindi(englishText);
-
-  setFormData((p) => ({
-    ...p,
-    beej_category: hindiText,
-  }));
-};
-
-
 
   const handleFileUpload = (e) =>
     setFormData((p) => ({ ...p, attachment: e.target.files[0] }));
@@ -430,10 +381,13 @@ const handleBeejCategoryChange = (e) => {
               <Select label="सीजन *" value={formData.season} onChange={handleChange("season")} options={seasonOptions} required />
               <Select label="फसल *" value={formData.fasal} onChange={handleChange("fasal")} options={fasalOptions} required />
               <Input
-  label="बीज कैटेगरी (English में लिखें)"
-  value={formData.beej_category}
-  onChange={handleBeejCategoryChange}
-/>
+                label="बीज कैटेगरी (English में लिखें)"
+                value={formData.beej_category || ""}
+                onChange={handleChange("beej_category")}
+                translate="no"
+                autoComplete="off"
+                spellCheck={false}
+              />
               <Input
                 label="बीज मात्रा (Seed Quantity)"
                 type="number"

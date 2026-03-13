@@ -205,7 +205,7 @@ class DatabaseQueryService:
             if wo.resources:
                 work_order_costs += sum(float(r.cost) if r.cost else 0.0 for r in wo.resources)
         
-        total_expenditure = task_costs + work_order_costs
+        total_expenditure = work_order_costs
         
         return {
             "incident_id": str(incident_id),

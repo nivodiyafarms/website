@@ -16,10 +16,96 @@ const unitMap = {
 };
 
 const subcategoryMap = {
-  fuel: ["petrol", "diesel"],
-  labor: ["daily", "contract", "permanent"],
-  material: ["seed", "fertilizer", "pesticide", "tools"],
-  machine: ["tractor", "harvester"],
+  fuel: [
+    "डीजल",
+    "पेट्रोल",
+    "जनरेटर ईंधन",
+    "पंप ईंधन"
+  ],
+  labor: [
+    "स्थायी मजदूर",
+    "दैनिक मजदूर",
+    "कटाई मजदूरी",
+    "बुवाई मजदूरी",
+    "निराई / गुड़ाई मजदूरी",
+    "सिंचाई मजदूरी",
+    "लोडिंग / अनलोडिंग"
+  ],
+  material: [
+    "बीज",
+    "खाद",
+    "कीटनाशक",
+    "जैविक खाद",
+    "सूक्ष्म पोषक तत्व",
+    "मल्चिंग शीट",
+    "पौध संरक्षण दवा"
+  ],
+  machine: [
+    "Tractor – Deutz Fahr 55E",
+    "Tractor – John Deere 5105",
+    "Tractor – Sonalika DI 734",
+    "Trolley – Big Size",
+    "Trolley – Medium Size",
+    "Thresher – Big Size",
+    "Thresher – Medium Size",
+    "Ridge Furrow Seed Drill",
+    "Normal Seed Drill",
+    "Maize Seed Drill",
+    "पंजा",
+    "सत्ता",
+    "Grading Machine",
+    "दुनाई वाला पंखा",
+    "Alternator (अल्टीनेटर)",
+    "Sprayer Tanker",
+    "अन्य मशीन / उपकरण"
+  ],
+  water: [
+    "सिंचाई पाइप",
+    "बोरवेल मरम्मत",
+    "मोटर / पंप मरम्मत",
+    "बिजली खर्च (पंप)",
+    "ड्रिप सिंचाई",
+    "स्प्रिंकलर सिस्टम",
+    "पानी टंकी",
+    "सिंचाई पाइपलाइन"
+  ],
+  service: [
+    "मशीन मरम्मत",
+    "मोटर मरम्मत",
+    "वाहन सर्विस",
+    "इलेक्ट्रिकल सर्विस",
+    "मशीन मेंटेनेंस"
+  ],
+  contract: [
+    "परिवहन",
+    "कटाई",
+    "सिंचाई",
+    "जुताई",
+    "रोपाई",
+    "फसल ढुलाई"
+  ],
+  construction: [
+    "सीमेंट",
+    "रेत",
+    "गिट्टी",
+    "ईंट",
+    "स्टील / सरिया",
+    "बजरी",
+    "प्लास्टर सामग्री",
+    "पानी टंकी",
+    "पाइप फिटिंग",
+    "इलेक्ट्रिकल वायर",
+    "स्विच / बोर्ड",
+    "टिन शेड",
+    "दरवाजा",
+    "खिड़की",
+    "पेंट",
+    "वॉटरप्रूफिंग",
+    "कंक्रीट मिक्स",
+    "टाइल्स",
+    "पाइप लाइन",
+    "अन्य निर्माण सामग्री"
+  ]
 };
 
 const initialForm = {
@@ -27,7 +113,6 @@ const initialForm = {
   category: "",
   subcategory: "",
   description: "",
-  notes: "",
   date: "",
   qty: "",
   unit: "",
@@ -82,7 +167,6 @@ export default function GeneralPurpose() {
       category: expense.category ?? "",
       subcategory: expense.subcategory ?? "",
       description: expense.description ?? "",
-      notes: expense.notes ?? "",
       date: expense.date ?? "",
       qty: expense.qty != null ? String(expense.qty) : "",
       unit: expense.unit ?? "",
@@ -94,15 +178,15 @@ export default function GeneralPurpose() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.subcategory || !form.subcategory.trim()) {
+      alert("कृपया उप-श्रेणी चुनें");
+      return;
+    }
     if (
       !form.category ||
       !form.qty ||
       !form.unit ||
-      !form.unit_rate ||
-      (
-        (subcategoryMap[form.category] && !form.subcategory) ||
-        (form.category === "other" && !form.subcategory)
-      )
+      !form.unit_rate
     ) {
       alert("कृपया सभी आवश्यक फ़ील्ड भरें");
       return;
@@ -110,9 +194,8 @@ export default function GeneralPurpose() {
     try {
       const payload = {
         category: form.category,
-        subcategory: form.subcategory || null,
+        subcategory: form.subcategory.trim(),
         description: form.description,
-        notes: form.notes || null,
         date: form.date || null,
         qty: Number(form.qty),
         unit: form.unit,
@@ -328,17 +411,6 @@ export default function GeneralPurpose() {
                   className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-primary-500"
                   rows={2}
                   placeholder="विवरण (वैकल्पिक)"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="text-sm font-medium block mb-1">Notes</label>
-                <textarea
-                  value={form.notes || ""}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-primary-500"
-                  rows={2}
-                  placeholder="Notes (optional)"
                 />
               </div>
 
