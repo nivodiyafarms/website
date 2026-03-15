@@ -163,7 +163,7 @@ export default function FarmMap() {
 
           // CASE 3: Active crop cycles exist → green marker(s) with radial distribution
           const total = activeCycles.length;
-          const radius = 0.00008;
+          const radius = 0.00006 + (total * 0.00002);
           return activeCycles.map((cycle, index) => {
             const angle = (index / total) * 2 * Math.PI;
             const offsetLat = lat + radius * Math.cos(angle);
