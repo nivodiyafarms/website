@@ -103,6 +103,9 @@ export default function FarmMap() {
 
         {fields.map((field) => {
           const cycles = getFieldCycles(field);
+          const activeCycles = cycles.filter(
+            (c) => c.status === "OPEN" || c.status === "REOPEN"
+          );
 
           if (!field.gps_centroid_lat || !field.gps_centroid_lng) {
             return null;
@@ -134,8 +137,8 @@ export default function FarmMap() {
             );
           }
 
-          // CASE 2: No crop cycle → amber marker
-          if (cycles.length === 0) {
+          // CASE 2: No active crop cycle → amber marker
+          if (activeCycles.length === 0) {
             return (
               <Marker key={fieldId} position={[lat, lng]} icon={AMBER_ICON}>
                 {zoom >= 17 && (
@@ -158,10 +161,13 @@ export default function FarmMap() {
             );
           }
 
-          // CASE 3: Crop cycles exist → green marker(s) with offset
-          return cycles.map((cycle, index) => {
-            const offsetLat = lat + (index * 0.00003);
-            const offsetLng = lng + (index * 0.00003);
+          // CASE 3: Active crop cycles exist → green marker(s) with radial distribution
+          const total = activeCycles.length;
+          const radius = 0.00008;
+          return activeCycles.map((cycle, index) => {
+            const angle = (index / total) * 2 * Math.PI;
+            const offsetLat = lat + radius * Math.cos(angle);
+            const offsetLng = lng + (radius * Math.sin(angle)) / Math.cos((lat * Math.PI) / 180);
             const area = cycle.cultivated_area != null ? cycle.cultivated_area : cycle.area;
             const stage = cycle.current_stage != null ? String(cycle.current_stage) : "—";
 
