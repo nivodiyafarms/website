@@ -161,13 +161,14 @@ export default function FarmMap() {
             );
           }
 
-          // CASE 3: Active crop cycles exist → green marker(s) with radial distribution
+          // CASE 3: Active crop cycles exist → green marker(s) spread horizontally
           const total = activeCycles.length;
-          const radius = 0.00006 + (total * 0.00002);
+          const spacing = 0.00006;
           return activeCycles.map((cycle, index) => {
-            const angle = (index / total) * 2 * Math.PI;
-            const offsetLat = lat + radius * Math.cos(angle);
-            const offsetLng = lng + (radius * Math.sin(angle)) / Math.cos((lat * Math.PI) / 180);
+            const offsetIndex = index - (total - 1) / 2;
+            const offsetLat = lat;
+            const offsetLng =
+              lng + (offsetIndex * spacing) / Math.cos((lat * Math.PI) / 180);
             const area = cycle.cultivated_area != null ? cycle.cultivated_area : cycle.area;
             const stage = cycle.current_stage != null ? String(cycle.current_stage) : "—";
 
