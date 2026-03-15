@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import CropCycleManagement from './pages/CropCycleManagement';
 import TaskDetailPage from './pages/TaskDetailPage';
 import GeneralPurpose from './pages/GeneralPurpose';
+import FarmMap from './pages/FarmMap';
 
 function App() {
   return (
@@ -58,6 +59,17 @@ function App() {
               <PrivateRoute>
                 <Layout>
                   <GeneralPurpose />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/farm-map"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <FarmMap />
                 </Layout>
               </PrivateRoute>
             }

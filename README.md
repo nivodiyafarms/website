@@ -80,6 +80,20 @@ backend/
 │
 └── requirements.txt
 
+Environment Variables
+
+Frontend (.env)
+
+VITE_API_BASE_URL=http://localhost:8000
+
+Vercel
+
+VITE_API_BASE_URL=https://your-backend.onrender.com
+
+Render
+
+FRONTEND_URL=https://your-app.vercel.app
+
 ```
 
 ## Quick Start
