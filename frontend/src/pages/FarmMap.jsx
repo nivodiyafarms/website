@@ -104,7 +104,7 @@ export default function FarmMap() {
         {fields.map((field) => {
           const cycles = getFieldCycles(field);
           const activeCycles = cycles.filter(
-            (c) => c.status === "OPEN" || c.status === "REOPEN"
+            (c) => c.status === "open" || c.status === "reopened"
           );
 
           if (!field.gps_centroid_lat || !field.gps_centroid_lng) {
