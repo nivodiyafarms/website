@@ -163,7 +163,7 @@ export default function FarmMap() {
 
           // CASE 3: Active crop cycles exist → green marker(s) spread horizontally
           const total = activeCycles.length;
-          const spacing = 0.00006;
+          const radius = 0.00006 + (total * 0.00002);
           return activeCycles.map((cycle, index) => {
             const offsetIndex = index - (total - 1) / 2;
             const offsetLat = lat;
