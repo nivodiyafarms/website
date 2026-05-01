@@ -244,6 +244,9 @@ const CropCycleManagement = () => {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">{cycle.crop_name}</h3>
+                  <p className="text-xs font-medium text-gray-500 mt-0.5">
+                    Crop Cycle ID: {cycle.incident_no ?? cycle.crop_cycle_id ?? '—'}
+                  </p>
                   <p className="text-sm text-gray-600">{getFieldDisplayLabel(cycle.field_code) || cycle.field_code} • {cycle.seed_category || 'No variety'}</p>
                 </div>
                 <span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(cycle.status)}`}>
