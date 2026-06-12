@@ -21,6 +21,7 @@ from app.api import notes
 from app.routes.task import router as task_router
 from app.routes.work_order import router as work_order_router
 from app.routes.work_order_resource import router as work_order_resource_router
+from app.routes.whatsapp import router as whatsapp_router
 
 # ---------------------------
 # REGISTER MODELS (STRICT)
@@ -101,6 +102,7 @@ app.include_router(work_order_router)
 app.include_router(work_order_resource_router)
 app.include_router(general_expenses_router)
 app.include_router(notes.router)
+app.include_router(whatsapp_router, prefix="/api/whatsapp")
 
 # ---------------------------
 # HEALTH

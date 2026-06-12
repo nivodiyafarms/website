@@ -1,4 +1,13 @@
-<!-- e2d57eff-9db6-4cc3-88dc-7e90a15fa313 ea9f36fc-eaa6-4fa0-89bf-debf5974909c -->
+---
+name: Nivodiya Farms KPI Dashboard Implementation Plan
+overview: ""
+todos:
+  - id: cfc11e4b-9c9b-4baa-bd8d-e00a2702d8e9
+    content: Build incident list view with status badges, create/edit modal, and CRUD functionality
+    status: pending
+isProject: false
+---
+
 # Nivodiya Farms KPI Dashboard Implementation Plan
 
 ## Tech Stack
@@ -185,18 +194,3 @@ lucide-react (for icons)
 5. Date format: ISO 8601 (yyyy-mm-dd)
 6. Status badges: color-coded (green=OPEN, gray=CLOSED)
 7. Stage badges: different colors for each stage
-
-### To-dos
-
-- [ ] Initialize FastAPI backend with project structure, dependencies, and PostgreSQL connection
-- [ ] Create SQLAlchemy models for User, Field, CropCatalog, Material, Equipment, and CropCycle
-- [ ] Create Pydantic schemas with validation for all models
-- [ ] Implement JWT authentication system with login endpoint and protected routes
-- [ ] Create RESTful API endpoints for all entities with CRUD operations
-- [ ] Create seed data script for master data (fields, crops, materials, users)
-- [ ] Initialize React app with Tailwind CSS, router, and project structure
-- [ ] Create AuthContext, API service with JWT interceptor, and PrivateRoute component
-- [ ] Build login page with form validation and JWT token handling
-- [ ] Build dashboard layout with left sidebar navigation (Dashboard, Incident tabs)
-- [ ] Build dashboard page with KPI cards and data visualization
-- [ ] Build incident list view with status badges, create/edit modal, and CRUD functionality

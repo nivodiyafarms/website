@@ -1,9 +1,11 @@
 # ERP API Contract Documentation
 
-**Version:** 1.0.0  
-**Last Updated:** 2024  
+**Version:** 1.1.0  
+**Last Updated:** March 2026  
 **Database:** PostgreSQL (Supabase)  
-**API Framework:** FastAPI
+**API Framework:** FastAPI  
+
+**Schema source:** Table and column names below are aligned with `backend/app/models/*.py` (SQLAlchemy ↔ Supabase `public` schema). If Supabase differs, treat the database as authoritative and update models + this doc together.
 
 ---
 
@@ -19,113 +21,210 @@
 
 ## Database Schema
 
+Tables below use **Supabase `public` column names** as implemented in `backend/app/models/*.py`.
+
+---
+
+### Table: `users`
+
+| Column (DB) | Type | Nullable | Description |
+|-------------|------|----------|-------------|
+| `user_id` | UUID | NO | Primary key |
+| `name` | VARCHAR(64) | NO | Display name |
+| `phone` | VARCHAR(15) | NO | Unique login phone |
+| `password` | VARCHAR(255) | NO | Hashed password |
+| `role` | `userrole` (enum) | NO | `admin`, `supervisor`, `worker` |
+| `language` | `userlanguage` (enum) | YES | `en_in`, `hi_in` |
+
+**Indexes / constraints:** PK `user_id`; UNIQUE `phone`
+
+---
+
+### Table: `fields`
+
+| Column (DB) | Type | Nullable | Description |
+|-------------|------|----------|-------------|
+| `field_id` | TEXT / VARCHAR | NO | Primary key (business id, e.g. NID001) |
+| `name` | VARCHAR(64) | NO | Field name |
+| `area_acre` | DOUBLE PRECISION | NO | Area in acres |
+| `gps_centroid_lat` | DOUBLE PRECISION | YES | Map centroid latitude |
+| `gps_centroid_lng` | DOUBLE PRECISION | YES | Map centroid longitude |
+| `village` | VARCHAR(100) | YES | Village |
+| `ownership` | VARCHAR(50) | YES | Ownership label |
+
+**Indexes / constraints:** PK `field_id`
+
+---
+
 ### Table: `crop_cycles`
 
-| Column Name | Type | Nullable | Default | Description |
-|------------|------|----------|---------|-------------|
+| Column (DB) | Type | Nullable | Default | Description |
+|-------------|------|----------|---------|-------------|
 | `crop_cycle_id` | UUID | NO | `gen_random_uuid()` | Primary key |
-| `incident_no` | VARCHAR(20) | NO | - | Unique human-readable ID (CC0001, CC0002, etc.) |
-| `field_code` | VARCHAR | NO | - | Reference to field |
-| `created_by` | UUID | YES | - | FK to `users.user_id` |
-| `crop_name` | VARCHAR(100) | NO | - | Name of crop |
+| `incident_no` | VARCHAR(20) | NO | - | Unique human-readable id (CC0001, …) |
+| `field_code` | VARCHAR / TEXT | NO | - | FK logical ref → `fields.field_id` |
+| `created_by` | UUID | YES | - | FK → `users.user_id` |
+| `crop_name` | VARCHAR(100) | NO | - | Crop name |
 | `seed_category` | VARCHAR(100) | YES | - | Seed variety/category |
 | `season` | VARCHAR(20) | YES | - | kharif / rabi / zaid |
 | `cultivated_area` | NUMERIC(10,2) | YES | - | Area in acres |
 | `seed_quantity` | NUMERIC(10,2) | YES | - | Seed quantity |
 | `sowing_date` | DATE | NO | - | Sowing date |
-| `expected_harvest_date` | DATE | YES | - | Expected harvest date |
-| `actual_harvest_date` | DATE | YES | - | Actual harvest date |
-| `current_stage` | `cycle_stage_enum` | NO | `'sowing'` | Current lifecycle stage |
-| `status` | `cycle_status_enum` | NO | `'open'` | Cycle status |
-| `total_expense` | NUMERIC(14,2) | YES | `0` | Total expenses |
-| `total_revenue` | NUMERIC(14,2) | YES | `0` | Total revenue |
-| `profit` | NUMERIC(14,2) | YES | `0` | Calculated profit |
+| `expected_harvest_date` | DATE | YES | - | Expected harvest |
+| `actual_harvest_date` | DATE | YES | - | Actual harvest |
+| `current_stage` | `cycle_stage_enum` | NO | `sowing` | Lifecycle stage |
+| `status` | `cycle_status_enum` | NO | `open` | Cycle status |
+| `total_expense` | NUMERIC(14,2) | YES | `0` | Rolled-up expense |
+| `total_revenue` | NUMERIC(14,2) | YES | `0` | Rolled-up revenue |
+| `profit` | NUMERIC(14,2) | YES | `0` | Profit |
 | `resolved_date` | DATE | YES | - | Resolution date |
-| `resolution_comments` | VARCHAR | YES | - | Resolution notes |
-| `observation` | VARCHAR | YES | - | Observation notes |
-| `short_description` | VARCHAR | YES | - | Short description |
-| `description` | VARCHAR | YES | - | Full description |
-| `created_at` | TIMESTAMP | NO | `now()` | Creation timestamp |
-| `updated_at` | TIMESTAMP | NO | `now()` | Last update timestamp |
+| `resolution_comments` | VARCHAR / TEXT | YES | - | Resolution notes |
+| `observation` | VARCHAR / TEXT | YES | - | Observation |
+| `short_description` | VARCHAR / TEXT | YES | - | Short description |
+| `description` | VARCHAR / TEXT | YES | - | Full description |
+| `created_at` | TIMESTAMP | NO | server default | Created |
+| `updated_at` | TIMESTAMP | NO | server default | Updated |
 
-**Indexes:**
-- Primary Key: `crop_cycle_id`
-- Unique: `incident_no`
+**Indexes / constraints:** PK `crop_cycle_id`; UNIQUE `incident_no`
+
+**ORM note:** Python attribute `CropCycle.id` maps to column `crop_cycle_id`.
 
 ---
 
 ### Table: `tasks`
 
-| Column Name | Type | Nullable | Default | Description |
-|------------|------|----------|---------|-------------|
+| Column (DB) | Type | Nullable | Default | Description |
+|-------------|------|----------|---------|-------------|
 | `task_id` | UUID | NO | `gen_random_uuid()` | Primary key |
-| `task_number` | VARCHAR(20) | NO | - | Unique human-readable ID (TSK0001, TSK0002, etc.) |
-| `crop_cycle_id` | UUID | NO | - | FK to `crop_cycles.crop_cycle_id` |
+| `task_number` | VARCHAR(20) | NO | - | Unique human-readable id (TSK0001, …) |
+| `crop_cycle_id` | UUID | NO | - | FK → `crop_cycles.crop_cycle_id` **ON DELETE RESTRICT** |
 | `category` | `task_category_enum` | YES | - | Task category |
 | `subcategory` | `task_subcategory_enum` | YES | - | Task subcategory |
-| `short_description` | VARCHAR(200) | NO | - | Short task description |
-| `description` | TEXT | YES | - | Full task description |
-| `assigned_to_id` | UUID | NO | - | FK to `users.user_id` |
-| `created_by_id` | UUID | NO | - | FK to `users.user_id` |
-| `status` | `task_status_enum` | NO | `'new'` | Task status |
-| `on_hold_reason` | TEXT | YES | - | Reason if status is `on_hold` |
-| `resolved_date` | TIMESTAMP | YES | - | Resolution timestamp |
+| `short_description` | VARCHAR(200) | NO | - | Short description |
+| `description` | TEXT | YES | - | Full description |
+| `assigned_to_id` | UUID | NO | - | FK → `users.user_id` |
+| `created_by_id` | UUID | NO | - | FK → `users.user_id` |
+| `status` | `task_status_enum` | NO | `new` | Task status |
+| `on_hold_reason` | TEXT | YES | - | Required when `on_hold` |
+| `resolved_date` | TIMESTAMPTZ | YES | - | Resolution time |
 | `resolution_comments` | TEXT | YES | - | Resolution notes |
-| `observation` | TEXT | YES | - | Observation notes |
-| `severity` | `severity_enum` | YES | - | Severity level |
-| `total_expense` | NUMERIC(14,2) | YES | `0` | Total task expenses |
-| `created_at` | TIMESTAMP | NO | `now()` | Creation timestamp |
-| `updated_at` | TIMESTAMP | NO | `now()` | Last update timestamp |
-| `closed_at` | TIMESTAMP | YES | - | Closure timestamp |
+| `observation` | TEXT | YES | - | Observation |
+| `severity` | `severity_enum` | YES | - | Severity |
+| `total_expense` | NUMERIC(14,2) | YES | `0` | Task expense total |
+| `created_at` | TIMESTAMPTZ | NO | - | Created |
+| `updated_at` | TIMESTAMPTZ | NO | - | Updated |
+| `closed_at` | TIMESTAMPTZ | YES | - | Closed |
 
-**Indexes:**
-- Primary Key: `task_id`
-- Unique: `task_number`
-- Foreign Key: `crop_cycle_id` → `crop_cycles.crop_cycle_id` (RESTRICT on delete)
+**Indexes / constraints:** PK `task_id`; UNIQUE `task_number`; FK `crop_cycle_id` → `crop_cycles.crop_cycle_id` (RESTRICT)
 
 ---
 
 ### Table: `work_orders`
 
-| Column Name | Type | Nullable | Default | Description |
-|------------|------|----------|---------|-------------|
-| `id` | UUID | NO | `gen_random_uuid()` | Primary key |
-| `work_order_no` | VARCHAR | YES | - | Unique human-readable ID (WO0001, WO0002, etc.) |
-| `task_id` | UUID | NO | - | FK to `tasks.task_id` |
-| `title` | TEXT | NO | - | Work order title |
-| `description` | TEXT | YES | - | Work order description |
-| `assigned_to` | UUID | YES | - | FK to `users.user_id` |
-| `created_by` | UUID | YES | - | FK to `users.user_id` |
-| `status` | `work_order_status_enum` | YES | `'open'` | Work order status |
+| Column (DB) | Type | Nullable | Default | Description |
+|-------------|------|----------|---------|-------------|
+| `work_order_id` | UUID | NO | `gen_random_uuid()` | Primary key |
+| `work_order_number` | VARCHAR / TEXT | NO | - | Unique human-readable id (WO0001, …) |
+| `task_id` | UUID | NO | - | FK → `tasks.task_id` **ON DELETE CASCADE** |
+| `short_description` | TEXT | NO | - | Short title / summary |
+| `description` | TEXT | YES | - | Long description |
+| `assigned_to` | UUID | YES | - | FK → `users.user_id` |
+| `created_by` | UUID | YES | - | FK → `users.user_id` |
+| `status` | `work_order_status_enum` | YES | `open` | Work order status |
 | `due_date` | DATE | YES | - | Due date |
-| `created_at` | TIMESTAMP | NO | `now()` | Creation timestamp |
-| `updated_at` | TIMESTAMP | NO | `now()` | Last update timestamp |
-| `closed_at` | TIMESTAMP | YES | - | Closure timestamp |
+| `created_at` | TIMESTAMPTZ | NO | - | Created |
+| `updated_at` | TIMESTAMPTZ | NO | - | Updated |
+| `closed_at` | TIMESTAMPTZ | YES | - | Closed |
 
-**Indexes:**
-- Primary Key: `id`
-- Unique: `work_order_no` (nullable)
-- Foreign Key: `task_id` → `tasks.task_id` (CASCADE on delete)
+**Indexes / constraints:** PK `work_order_id`; UNIQUE `work_order_number`; FK `task_id` → `tasks.task_id` (CASCADE)
 
 ---
 
 ### Table: `work_order_resources`
 
-| Column Name | Type | Nullable | Default | Description |
-|------------|------|----------|---------|-------------|
-| `id` | UUID | NO | `gen_random_uuid()` | Primary key |
-| `work_order_id` | UUID | NO | - | FK to `work_orders.id` |
-| `resource_type` | `resource_type_enum` | NO | - | Type of resource |
-| `name` | TEXT | NO | - | Resource name (e.g., Diesel, Urea, Tractor) |
-| `qty` | NUMERIC(10,2) | NO | - | Quantity |
-| `unit` | TEXT | NO | - | Unit (litre / kg / hour / acre) |
-| `rate` | NUMERIC(12,2) | YES | - | Rate per unit |
-| `cost` | NUMERIC(14,2) | NO | - | Total cost |
-| `created_at` | TIMESTAMP | NO | `now()` | Creation timestamp |
+| Column (DB) | Type | Nullable | Description |
+|-------------|------|----------|-------------|
+| `work_order_resources_id` | UUID | NO | Primary key |
+| `work_order_id` | UUID | NO | FK → `work_orders.work_order_id` **ON DELETE CASCADE** |
+| `resource_type` | `resource_type_enum` | NO | Resource type |
+| `name` | TEXT | NO | Resource name |
+| `qty` | NUMERIC(10,2) | NO | Quantity |
+| `unit` | TEXT | NO | Unit |
+| `rate` | NUMERIC(12,2) | YES | Rate per unit |
+| `cost` | NUMERIC(14,2) | NO | Line cost |
+| `created_at` | TIMESTAMPTZ | NO | Created |
 
-**Indexes:**
-- Primary Key: `id`
-- Foreign Key: `work_order_id` → `work_orders.id` (CASCADE on delete)
+**Indexes / constraints:** PK `work_order_resources_id`; FK `work_order_id` → `work_orders.work_order_id` (CASCADE)
+
+---
+
+### Table: `general_expense`
+
+| Column (DB) | Type | Nullable | Description |
+|-------------|------|----------|-------------|
+| `general_expense_id` | UUID | NO | Primary key |
+| `category` | TEXT | YES | Category |
+| `subcategory` | TEXT | YES | Subcategory |
+| `description` | TEXT | YES | Description |
+| `date` | DATE | YES | Expense date |
+| `qty` | NUMERIC | YES | Quantity |
+| `unit` | TEXT | YES | Unit |
+| `unit_rate` | NUMERIC | YES | Unit rate |
+| `total_cost` | NUMERIC | YES | Total cost |
+| `related_type` | TEXT | YES | Optional polymorphic type |
+| `related_id` | UUID | YES | Optional polymorphic id |
+| `created_by` | UUID | YES | FK → `users.user_id` (logical) |
+| `created_at` | TIMESTAMPTZ | YES | Created |
+
+**Indexes / constraints:** PK `general_expense_id`
+
+---
+
+### Table: `notes`
+
+Polymorphic notes (crop cycles, tasks, work orders, expenses). Stored as `public.notes`.
+
+| Column (DB) | Type | Nullable | Description |
+|-------------|------|----------|-------------|
+| `id` | UUID | NO | Primary key |
+| `related_type` | `related_type_enum` | YES | `crop_cycle`, `task`, `work_order`, `expense` |
+| `related_id` | UUID | YES | Target row id |
+| `author_id` | UUID | YES | FK → `users.user_id` (optional) |
+| `text` | TEXT | YES | Note body |
+| `media_url` | VARCHAR / TEXT | YES | Attachment URL |
+| `media_type` | VARCHAR(20) | YES | MIME / type hint |
+| `created_at` | TIMESTAMPTZ | YES | Created |
+
+**Indexes / constraints:** PK `id`
+
+---
+
+### Table: `crop_cycle_incidents` (legacy / parallel schema)
+
+Present in `app/models/crop_cycle_incident.py`. **Application tasks** in the current ORM link to **`crop_cycles.crop_cycle_id`**, not this table. Confirm in Supabase whether this table is still populated and whether any FKs point to it.
+
+| Column (DB) | Type | Nullable | Description |
+|-------------|------|----------|-------------|
+| `incident_id` | UUID | NO | Primary key |
+| `field_id` | VARCHAR(50) | NO | FK → `fields.field_id` |
+| `crop_name` | VARCHAR(100) | NO | Crop name |
+| `crop_variety` | VARCHAR(100) | YES | Variety |
+| `sowing_date` | TIMESTAMP | NO | Sowing |
+| `expected_harvest_date` | TIMESTAMP | YES | Expected harvest |
+| `current_stage` | VARCHAR(11) | NO | Stage (string) |
+| `status` | VARCHAR(6) | NO | Status (string) |
+| `supervisor_id` | UUID | NO | FK → `users.user_id` |
+| `short_description` | VARCHAR(200) | YES | Short description |
+| `description` | TEXT | YES | Description |
+| `notes` | TEXT | YES | Notes |
+| `opened_at` | TIMESTAMP | NO | Opened |
+| `updated_at` | TIMESTAMP | NO | Updated |
+| `closed_at` | TIMESTAMP | YES | Closed |
+| `is_voice_recorded` | VARCHAR(10) | NO | Default `no` |
+| `audio_file_path` | VARCHAR(500) | YES | Audio path |
+| `transcript` | TEXT | YES | Transcript |
+
+**Indexes / constraints:** PK `incident_id`
 
 ---
 
@@ -236,6 +335,25 @@ All enum values are **lowercase** in the database. Python enum classes use UPPER
 - `service`
 - `contract`
 - `other`
+- `construction`
+
+### `related_type_enum` (Notes — `notes.related_type`)
+
+- `crop_cycle`
+- `task`
+- `work_order`
+- `expense`
+
+### `userrole` (Users — `users.role`)
+
+- `admin`
+- `supervisor`
+- `worker`
+
+### `userlanguage` (Users — `users.language`)
+
+- `en_in`
+- `hi_in`
 
 ---
 
@@ -338,6 +456,12 @@ All enum values are **lowercase** in the database. Python enum classes use UPPER
 | POST | `/api/chatbot/voice` | Voice chat | Yes |
 | POST | `/api/chatbot/context/clear` | Clear chat context | Yes |
 
+### WhatsApp (Twilio webhook)
+
+| Method | Path | Description | Auth Required |
+|--------|------|-------------|---------------|
+| POST | `/api/whatsapp/webhook` | Twilio WhatsApp status/message webhook (form-data) | No (Twilio) |
+
 ---
 
 ## Field Ownership Rules
@@ -356,9 +480,9 @@ These fields are **always** generated or set by the backend:
    - Generated by: `generate_task_id(db)`
    - Frontend must NOT send this field
 
-3. **`work_orders.work_order_no`**
+3. **`work_orders.work_order_number`**
    - Format: `WO0001`, `WO0002`, etc.
-   - Generated by: `generate_work_order_id(db)`
+   - Generated by: `generate_work_order_id(db)` (or equivalent)
    - Frontend must NOT send this field
 
 4. **`crop_cycles.created_by`**
@@ -392,7 +516,7 @@ These fields are accepted from the frontend:
 
 - **Crop Cycles:** `field_code`, `crop_name`, `seed_category`, `season`, `cultivated_area`, `seed_quantity`, `sowing_date`, `expected_harvest_date`, `current_stage`, `status`, `short_description`, `description`
 - **Tasks:** `category`, `subcategory`, `short_description`, `description`, `assigned_to_id`, `severity`, `status` (on update), `on_hold_reason`, `resolution_comments`, `observation`
-- **Work Orders:** `title`, `description`, `assigned_to`, `due_date`
+- **Work Orders:** `short_description`, `description`, `assigned_to`, `due_date`
 - **Work Order Resources:** `resource_type`, `name`, `qty`, `unit`, `rate`, `cost`
 
 ---
@@ -411,7 +535,7 @@ These fields are accepted from the frontend:
    - **Rule:** Deleting a task automatically deletes all its work orders
    - **Action Required:** None (automatic)
 
-3. **`work_order_resources.work_order_id` → `work_orders.id`**
+3. **`work_order_resources.work_order_id` → `work_orders.work_order_id`**
    - **On Delete:** `CASCADE`
    - **Rule:** Deleting a work order automatically deletes all its resources
    - **Action Required:** None (automatic)
@@ -444,8 +568,8 @@ def delete_crop_cycle_safely(crop_cycle_id):
     for task in tasks:
         work_orders = get_work_orders_for_task(task.task_id)
         for wo in work_orders:
-            delete_work_order_resources(wo.id)  # Optional - cascades anyway
-            delete_work_order(wo.id)  # Resources cascade
+            delete_work_order_resources(wo.work_order_id)  # Optional - cascades anyway
+            delete_work_order(wo.work_order_id)  # Resources cascade
     
     # 3. Delete all tasks
     for task in tasks:
@@ -461,9 +585,9 @@ def delete_crop_cycle_safely(crop_cycle_id):
 
 1. **All enum values are lowercase** in the database. Python enum classes use UPPERCASE names but lowercase `.value` properties.
 
-2. **Authentication:** All endpoints (except `/api/auth/login`) require JWT authentication via `Authorization: Bearer <token>` header.
+2. **Authentication:** Most endpoints require JWT via `Authorization: Bearer <token>`. Exceptions include **`POST /api/auth/login`** and integration webhooks such as **`POST /api/whatsapp/webhook`** (Twilio; not JWT — validate via Twilio signature in production).
 
-3. **UUIDs:** All primary keys and foreign keys use UUID type. Frontend should handle UUIDs as strings.
+3. **Primary keys:** Most tables use UUID PKs; **`fields`** uses a string `field_id` (business key). Frontend should send UUIDs as strings where applicable.
 
 4. **Timestamps:** All `created_at` and `updated_at` fields are automatically managed by the database or backend. Do not send these from frontend.
 
