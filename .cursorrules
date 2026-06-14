@@ -1,0 +1,22 @@
+# .cursorrules — Nivodiya Farms ERP
+
+## Canonical spec lives in CLAUDE.md
+
+This project's authoritative rules, data model, migration discipline, agent
+contract, and carried-forward bug-prevention rules are maintained in **CLAUDE.md**
+at the repo root. Read it in full before making changes.
+
+Do not duplicate rules here — edit CLAUDE.md and treat it as the single source
+of truth. This file exists only so Cursor (if used) loads the same context.
+
+Key reminders (full detail in CLAUDE.md):
+- Build toward the variety-anchored model: Crop Cycle = variety + season = the P&L unit;
+  fields are TAGS (tasks.field_id), not a hierarchy level; crop_cycle_id is nullable
+  (field-prep tasks have no crop).
+- Every schema change is an Alembic migration, committed and reviewed. No Supabase
+  dashboard hand-edits. Watch the enum create_type=False gotcha.
+- Sales and yields are NEW line-item tables; P&L is derived, not hand-maintained.
+- Agent calls a FIXED tool set, never raw SQL. WhatsApp threading via short codes.
+- Never surface "incident" to family — say crop cycle / फसल चक्र.
+- Hindi↔English: short_description ↔ tipanni (टिप्पणी), description ↔ varnan (वर्णन). (Historically reversed — do not reintroduce.)
+- Minimal-diff changes; report risk level and affected files per change.
