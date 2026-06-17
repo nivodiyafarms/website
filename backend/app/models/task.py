@@ -98,7 +98,14 @@ class Task(Base):
     crop_cycle_id = Column(
         UUID(as_uuid=True),
         ForeignKey("crop_cycles.crop_cycle_id", ondelete="RESTRICT"),
-        nullable=False
+        nullable=True,   # nullable: field-prep tasks have no crop cycle
+    )
+
+    # Field tag — nullable; set for both crop tasks and field-prep tasks
+    field_id = Column(
+        String,
+        ForeignKey("fields.field_id"),
+        nullable=True,
     )
 
     # Classification (category and subcategory replace task_type)
@@ -157,6 +164,7 @@ class Task(Base):
 
     # Relationships
     crop_cycle = relationship("CropCycle", backref="tasks")
+    field = relationship("Field", foreign_keys=[field_id])
     work_orders = relationship("WorkOrder", back_populates="task")
     assigned_to = relationship("User", foreign_keys=[assigned_to_id])
     created_by = relationship("User", foreign_keys=[created_by_id])

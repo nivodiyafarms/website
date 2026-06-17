@@ -128,6 +128,13 @@ class CropCycle(Base):
         nullable=True,
     )
 
+    # Fields this cycle spans (via junction table)
+    cycle_fields = relationship(
+        "CropCycleField",
+        back_populates="crop_cycle",
+        cascade="all, delete-orphan",
+    )
+
 
 # -----------------------------
 # Notes relationship (polymorphic)
