@@ -2,8 +2,9 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime, date
 from uuid import UUID
-from app.models.crop_cycle_incident import CropStage, CropCycleStatus
-from app.models.task import TaskStatus, SeverityLevel, ResourceType
+from app.models.crop_cycle import CropStage, CropCycleStatus
+from app.models.task import TaskStatus, SeverityLevel
+from app.models.enums import ResourceType
 from app.models.work_order import WorkOrderStatus
 
 

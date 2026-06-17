@@ -2,9 +2,12 @@
 from sqlalchemy import (
     Column,
     String,
+    Text,
     Date,
     DateTime,
     Numeric,
+    ForeignKey,
+    UniqueConstraint,
     and_,
 )
 from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
@@ -50,6 +53,10 @@ class CropCycle(Base):
     This is the ROOT entity for tasks & work orders
     """
     __tablename__ = "crop_cycles"
+    __table_args__ = (
+        # Matches live DB constraint name; do not rename via migration.
+        UniqueConstraint('incident_no', name='crop_cycles_incident_no_key'),
+    )
 
     # Primary key - maps to database column 'crop_cycle_id'
     id = Column('crop_cycle_id', UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -60,43 +67,48 @@ class CropCycle(Base):
         """Alias for id to match API response format"""
         return self.id
 
-    # Human-readable code (INC00001)
-    incident_no = Column(String(20), unique=True, nullable=False, index=True)
+    # Human-readable code (CC0001) — uniqueness enforced via __table_args__ constraint
+    incident_no = Column(Text, nullable=True)
 
-    # Basic relations (kept loose for demo)
+    # Basic relations
     field_code = Column(String, nullable=False)
-    created_by = Column(UUID(as_uuid=True), nullable=True)
+    # FK name matches live DB: crop_cycles_created_by_fkey → public.users.user_id
+    created_by = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.user_id", name="crop_cycles_created_by_fkey", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Crop details
     crop_name = Column(String(100), nullable=False)
     seed_category = Column(String(100), nullable=True)
-    season = Column(String(20), nullable=True)  # kharif / rabi / zaid
+    season = Column(String(20), nullable=False)  # kharif / rabi / zaid — NOT NULL in DB
 
     # Area & seed
-    cultivated_area = Column(Numeric(10, 2), nullable=True)  # Changed from area_acre to match Supabase
+    cultivated_area = Column(Numeric(), nullable=True)
     seed_quantity = Column(Numeric(10, 2), nullable=True)
 
     # Dates
-    sowing_date = Column(Date, nullable=False)
+    sowing_date = Column(Date, nullable=True)
     expected_harvest_date = Column(Date, nullable=True)
     actual_harvest_date = Column(Date, nullable=True)
 
     # Stage & status
     current_stage = Column(
         PGEnum(CropStage, name="cycle_stage_enum", create_type=False, schema="public", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
-        nullable=False,
+        nullable=True,
         default=CropStage.SOWING,
     )
     status = Column(
         PGEnum(CropCycleStatus, name="cycle_status_enum", create_type=False, schema="public", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
-        nullable=False,
+        nullable=True,
         default=CropCycleStatus.OPEN,
     )
 
-    # Financial rollups
-    total_expense = Column(Numeric(14, 2), default=0)
-    total_revenue = Column(Numeric(14, 2), default=0)
-    profit = Column(Numeric(14, 2), default=0)
+    # Financial rollups — plain Numeric to match DB (no precision/scale specified)
+    total_expense = Column(Numeric(), default=0)
+    total_revenue = Column(Numeric(), default=0)
+    profit = Column(Numeric(), default=0)
 
     # Resolution
     resolved_date = Column(Date, nullable=True)
@@ -107,13 +119,13 @@ class CropCycle(Base):
     short_description = Column(String, nullable=True)
     description = Column(String, nullable=True)
 
-    # Audit
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # Audit — timestamptz nullable to match DB
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=True)
     updated_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
-        nullable=False,
+        nullable=True,
     )
 
 

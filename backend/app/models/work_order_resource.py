@@ -34,28 +34,27 @@ class WorkOrderResource(Base):
     work_order_id = Column(
         UUID(as_uuid=True),
         ForeignKey("work_orders.work_order_id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
+        nullable=True,
     )
 
     # Classification
     resource_type = Column(
         PGEnum(ResourceType, name="resource_type_enum", create_type=False, values_callable=lambda enum_cls: [e.value for e in enum_cls]),
-        nullable=False
+        nullable=True
     )
 
-    # Resource details
-    name = Column(Text, nullable=False)     # e.g. Diesel, Urea, Tractor
-    qty = Column(Numeric(10, 2), nullable=False)
-    unit = Column(Text, nullable=False)     # litre / kg / hour / acre
-    rate = Column(Numeric(12, 2), nullable=True)
-    cost = Column(Numeric(14, 2), nullable=False)
+    # Resource details — Numeric() without precision to match DB
+    name = Column(Text, nullable=True)
+    qty = Column(Numeric(), nullable=True)
+    unit = Column(Text, nullable=True)
+    rate = Column(Numeric(), nullable=True)
+    cost = Column(Numeric(), nullable=True)
 
     # Audit
     created_at = Column(
         DateTime(timezone=True),
         default=datetime.utcnow,
-        nullable=False
+        nullable=True
     )
 
     # Relationships

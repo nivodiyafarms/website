@@ -7,6 +7,7 @@ from sqlalchemy import (
     Text,
     ForeignKey,
     Numeric,
+    UniqueConstraint,
     and_
 )
 from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
@@ -40,27 +41,31 @@ class WorkOrder(Base):
     Linked strictly to a Task
     """
     __tablename__ = "work_orders"
+    __table_args__ = (
+        # Matches live DB constraint name (legacy "work_order_no" name); do not rename.
+        UniqueConstraint('work_order_number', name='work_orders_work_order_no_key'),
+    )
 
     # Primary key (matches database: work_order_id)
     work_order_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Human-readable WO number (matches database: work_order_number)
-    work_order_number = Column(String, unique=True, nullable=False, index=True)
+    work_order_number = Column(String, nullable=False)
 
-    # Parent Task (correct hierarchy)
+    # Parent Task
     task_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("tasks.task_id", ondelete="CASCADE"),
-        nullable=False
+        ForeignKey("tasks.task_id"),
+        nullable=True
     )
 
     # Details
     short_description = Column(Text, nullable=False)
     description = Column(Text, nullable=True)
 
-    # Assignment
-    assigned_to = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
+    # Assignment — plain UUID columns; no FK constraint exists in DB
+    assigned_to = Column(UUID(as_uuid=True), nullable=True)
+    created_by = Column(UUID(as_uuid=True), nullable=True)
 
     # Status
     status = Column(
@@ -97,8 +102,6 @@ class WorkOrder(Base):
         viewonly=True
     )
 
-    assigned_to_user = relationship("User", foreign_keys=[assigned_to])
-    created_by_user = relationship("User", foreign_keys=[created_by])
 
     # -----------------------------
     # Computed (read-only)

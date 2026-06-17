@@ -5,11 +5,12 @@ from sqlalchemy import (
     Date,
     DateTime
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
 from datetime import datetime
 import uuid
 
 from app.database import Base
+from app.models.note import RelatedType
 
 
 # -----------------------------
@@ -45,8 +46,12 @@ class GeneralExpense(Base):
     unit_rate = Column(Numeric, nullable=True)
     total_cost = Column(Numeric, nullable=True)
 
-    # Relation (optional linking)
-    related_type = Column(Text, nullable=True)
+    # Relation (optional linking) — typed enum matches related_type_enum in DB
+    related_type = Column(
+        PGEnum(RelatedType, name="related_type_enum", create_type=False,
+               values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        nullable=True
+    )
     related_id = Column(UUID(as_uuid=True), nullable=True)
 
     # Audit

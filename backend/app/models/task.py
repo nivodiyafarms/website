@@ -2,7 +2,7 @@
 
 from sqlalchemy import (
     Column, String, DateTime, Text, ForeignKey,
-    Numeric
+    Numeric, Boolean, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
 from sqlalchemy.orm import relationship
@@ -86,10 +86,14 @@ class TaskSubcategory(str, enum.Enum):
 # -----------------------------
 class Task(Base):
     __tablename__ = "tasks"
+    __table_args__ = (
+        # Matches live DB constraint name (legacy "task_code" name); do not rename.
+        UniqueConstraint('task_number', name='tasks_task_code_key'),
+    )
 
     task_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    task_number = Column(String(20), unique=True, nullable=False, index=True)
+    task_number = Column(String(20), nullable=False)
 
     crop_cycle_id = Column(
         UUID(as_uuid=True),
@@ -100,7 +104,7 @@ class Task(Base):
     # Classification (category and subcategory replace task_type)
     category = Column(
         PGEnum(TaskCategory, name="task_category_enum", create_type=False, values_callable=lambda enum_cls: [e.value for e in enum_cls]),
-        nullable=True
+        nullable=False
     )
     subcategory = Column(
         PGEnum(TaskSubcategory, name="task_subcategory_enum", create_type=False, values_callable=lambda enum_cls: [e.value for e in enum_cls]),
@@ -120,6 +124,15 @@ class Task(Base):
         ForeignKey("users.user_id"),
         nullable=False
     )
+    approved_by_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.user_id"),
+        nullable=True
+    )
+
+    # Voice integration fields (Sarvam STT — populated by WhatsApp agent)
+    is_voice_created = Column(Boolean, nullable=True, default=False)
+    transcript = Column(Text, nullable=True)
 
     status = Column(
         PGEnum(TaskStatus, name="task_status_enum", create_type=False, values_callable=lambda enum_cls: [e.value for e in enum_cls]),
@@ -147,3 +160,4 @@ class Task(Base):
     work_orders = relationship("WorkOrder", back_populates="task")
     assigned_to = relationship("User", foreign_keys=[assigned_to_id])
     created_by = relationship("User", foreign_keys=[created_by_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_id])
