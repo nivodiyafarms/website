@@ -29,11 +29,14 @@ creation time; they must never be NULL in the app layer.
 ──────────────────────────────────────────────────────────────────────────────
 Changes
 ──────────────────────────────────────────────────────────────────────────────
-  1. ADD COLUMN crop_cycles.crop_year INTEGER (nullable initially)
+  1. ADD COLUMN crop_cycles.crop_year INTEGER (nullable)
   2. BACKFILL the 98 existing cycles via the season → year rule above
   3. Guard: raise RuntimeError if any row remains NULL after backfill
      (covers unknown season values — would surface a data issue early)
-  4. SET NOT NULL now that every row is covered
+
+  NOT NULL is intentionally deferred to a later migration once the
+  create-cycle endpoint always supplies crop_year. Adding it now would
+  break new inserts on the live app.
 """
 from typing import Sequence, Union
 
@@ -64,7 +67,10 @@ def upgrade() -> None:
         WHERE  crop_year IS NULL
     """))
 
-    # ── 3. Guard: every row must now have a value ───────────────────────────────
+    # ── 3. Guard: every existing row must now have a value ─────────────────────
+    # Catches unknown season values that the CASE above would leave NULL.
+    # NOT NULL constraint is deferred — new inserts may legitimately have NULL
+    # until the create-cycle path is updated to supply crop_year.
     null_count = conn.execute(
         sa.text("SELECT COUNT(*) FROM crop_cycles WHERE crop_year IS NULL")
     ).scalar()
@@ -74,9 +80,6 @@ def upgrade() -> None:
             "Check for unknown season values: "
             "SELECT DISTINCT season FROM crop_cycles WHERE crop_year IS NULL"
         )
-
-    # ── 4. Enforce NOT NULL now that backfill is verified ──────────────────────
-    op.alter_column('crop_cycles', 'crop_year', nullable=False)
 
 
 def downgrade() -> None:

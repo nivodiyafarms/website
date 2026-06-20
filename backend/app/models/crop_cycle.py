@@ -86,7 +86,8 @@ class CropCycle(Base):
     season = Column(String(20), nullable=False)  # kharif / rabi / zaid — NOT NULL in DB
     # crop_year = calendar year of sowing. UI: "{season} {crop_year}" e.g. "Kharif 2025".
     # NOT unique alone — identity is season + crop_year + crop_name + seed_category.
-    crop_year = Column(Integer(), nullable=False)
+    # nullable until create-cycle path always supplies it; NOT NULL added in later migration.
+    crop_year = Column(Integer(), nullable=True)
 
     # Area & seed
     cultivated_area = Column(Numeric(), nullable=True)
