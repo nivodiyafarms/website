@@ -85,9 +85,17 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # exc.errors() may contain non-serializable objects (e.g. ValueError) in ctx.
+    # Stringify ctx values before returning.
+    def _safe(err: dict) -> dict:
+        out = {k: v for k, v in err.items() if k != "ctx"}
+        if "ctx" in err:
+            out["ctx"] = {k: str(v) for k, v in err["ctx"].items()}
+        return out
+
     return JSONResponse(
         status_code=422,
-        content={"success": False, "errors": exc.errors()},
+        content={"success": False, "errors": [_safe(e) for e in exc.errors()]},
     )
 
 # ---------------------------
