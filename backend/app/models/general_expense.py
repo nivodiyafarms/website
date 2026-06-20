@@ -2,8 +2,9 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, Text, Numeric, Date, DateTime
+from sqlalchemy import Column, Text, Numeric, Date, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
+from sqlalchemy.orm import relationship
 
 from app.database import Base
 from app.models.note import RelatedType
@@ -72,5 +73,11 @@ class GeneralExpense(Base):
         default=ExpenseReviewStatus.UNREVIEWED,
         server_default="unreviewed",
     )
-    reviewed_by = Column(UUID(as_uuid=True), nullable=True)
+    reviewed_by = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workers.worker_id", name="general_expense_reviewed_by_fkey"),
+        nullable=True,
+    )
     void_reason = Column(Text, nullable=True)
+
+    reviewer = relationship("Worker", foreign_keys=[reviewed_by])

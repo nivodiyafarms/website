@@ -18,6 +18,8 @@ from app.api.fields import router as fields_router
 from app.api.crop_cycles import router as crop_cycles_router
 from app.api.general_expenses import router as general_expenses_router
 from app.api import notes
+from app.api.pnl import router as pnl_router
+from app.api.prep_cost_allocations import router as prep_cost_allocations_router
 from app.routes.task import router as task_router
 from app.routes.work_order import router as work_order_router
 from app.routes.work_order_resource import router as work_order_resource_router
@@ -28,11 +30,16 @@ from app.routes.work_order_resource import router as work_order_resource_router
 from app.models.user import User
 from app.models.field import Field
 from app.models.crop_cycle import CropCycle
+from app.models.crop_cycle_field import CropCycleField
 from app.models.task import Task
 from app.models.work_order import WorkOrder
 from app.models.work_order_resource import WorkOrderResource
 from app.models.general_expense import GeneralExpense
 from app.models.note import Note
+from app.models.worker import Worker
+from app.models.sale import Sale
+from app.models.yield_record import YieldRecord
+from app.models.prep_cost_allocation import PrepCostAllocation
 
 # ---------------------------
 # APP INIT
@@ -96,6 +103,8 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(fields_router)
 app.include_router(crop_cycles_router)
+app.include_router(pnl_router)
+app.include_router(prep_cost_allocations_router)
 app.include_router(task_router)
 app.include_router(work_order_router)
 app.include_router(work_order_resource_router)
