@@ -1,6 +1,7 @@
 # backend/app/models/crop_cycle.py
 from sqlalchemy import (
     Column,
+    Integer,
     String,
     Text,
     Date,
@@ -83,6 +84,9 @@ class CropCycle(Base):
     crop_name = Column(String(100), nullable=False)
     seed_category = Column(String(100), nullable=True)
     season = Column(String(20), nullable=False)  # kharif / rabi / zaid — NOT NULL in DB
+    # crop_year = calendar year of sowing. UI: "{season} {crop_year}" e.g. "Kharif 2025".
+    # NOT unique alone — identity is season + crop_year + crop_name + seed_category.
+    crop_year = Column(Integer(), nullable=False)
 
     # Area & seed
     cultivated_area = Column(Numeric(), nullable=True)
