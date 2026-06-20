@@ -1,7 +1,7 @@
 # backend/app/models/task.py
 
 from sqlalchemy import (
-    Column, String, DateTime, Text, ForeignKey,
+    Column, Integer, String, DateTime, Text, ForeignKey,
     Numeric, Boolean, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
@@ -136,6 +136,14 @@ class Task(Base):
         ForeignKey("users.user_id"),
         nullable=True
     )
+
+    # Prep-task season tag — set on field-prep tasks (crop_cycle_id NULL) to assign the
+    # prep cost to a season+year; null on crop tasks and untagged prep tasks.
+    # UI label: "{prep_season} {prep_crop_year}" e.g. "Kharif 2025".
+    # Invariant (enforced by create endpoint, not DB): crop_cycle_id and
+    # prep_season/prep_crop_year are mutually exclusive.
+    prep_season = Column(String(20), nullable=True)
+    prep_crop_year = Column(Integer(), nullable=True)
 
     # Voice integration fields (Sarvam STT — populated by WhatsApp agent)
     is_voice_created = Column(Boolean, nullable=True, default=False)
