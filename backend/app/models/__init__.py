@@ -9,6 +9,10 @@ from .work_order import WorkOrder
 from .work_order_resource import WorkOrderResource
 from .general_expense import GeneralExpense
 from .note import Note
+from .worker import Worker
+from .sale import Sale
+from .yield_record import YieldRecord
+from .prep_cost_allocation import PrepCostAllocation
 
 __all__ = [
     "User",
@@ -20,4 +24,8 @@ __all__ = [
     "WorkOrderResource",
     "GeneralExpense",
     "Note",
+    "Worker",
+    "Sale",
+    "YieldRecord",
+    "PrepCostAllocation",
 ]

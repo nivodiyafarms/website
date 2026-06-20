@@ -1,16 +1,18 @@
-from sqlalchemy import (
-    Column,
-    Text,
-    Numeric,
-    Date,
-    DateTime
-)
-from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
-from datetime import datetime
+import enum
 import uuid
+from datetime import datetime
+
+from sqlalchemy import Column, Text, Numeric, Date, DateTime
+from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
 
 from app.database import Base
 from app.models.note import RelatedType
+
+
+class ExpenseReviewStatus(str, enum.Enum):
+    UNREVIEWED = "unreviewed"
+    VERIFIED = "verified"
+    VOID = "void"
 
 
 # -----------------------------
@@ -61,3 +63,14 @@ class GeneralExpense(Base):
         DateTime(timezone=True),
         default=datetime.utcnow
     )
+
+    # Review workflow (verify-after model: expense posts immediately, reviewed later)
+    review_status = Column(
+        PGEnum(ExpenseReviewStatus, name="expense_review_status_enum", create_type=False,
+               values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=ExpenseReviewStatus.UNREVIEWED,
+        server_default="unreviewed",
+    )
+    reviewed_by = Column(UUID(as_uuid=True), nullable=True)
+    void_reason = Column(Text, nullable=True)

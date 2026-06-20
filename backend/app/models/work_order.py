@@ -27,6 +27,7 @@ class WorkOrderStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     ON_HOLD = "on_hold"
     COMPLETED = "completed"
+    PENDING_REVIEW = "pending_review"   # worker submitted; supervisor must close
     PARTIAL = "partial"
     CLOSED = "closed"
     CANCELLED = "cancelled"
@@ -63,8 +64,12 @@ class WorkOrder(Base):
     short_description = Column(Text, nullable=False)
     description = Column(Text, nullable=True)
 
-    # Assignment — plain UUID columns; no FK constraint exists in DB
-    assigned_to = Column(UUID(as_uuid=True), nullable=True)
+    # assigned_to → workers.worker_id  (FK added NOT VALID; validate after workers populated)
+    assigned_to = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workers.worker_id", name="work_orders_assigned_to_fkey"),
+        nullable=True,
+    )
     created_by = Column(UUID(as_uuid=True), nullable=True)
 
     # Status
@@ -86,6 +91,7 @@ class WorkOrder(Base):
     # Relationships
     # -----------------------------
     task = relationship("Task", foreign_keys=[task_id])
+    assigned_worker = relationship("Worker", foreign_keys=[assigned_to])
 
     resources = relationship(
         "WorkOrderResource",
