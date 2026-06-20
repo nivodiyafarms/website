@@ -20,6 +20,7 @@ from app.api.general_expenses import router as general_expenses_router
 from app.api import notes
 from app.api.pnl import router as pnl_router
 from app.api.prep_cost_allocations import router as prep_cost_allocations_router
+from app.api.seasons import router as seasons_router
 from app.routes.task import router as task_router
 from app.routes.work_order import router as work_order_router
 from app.routes.work_order_resource import router as work_order_resource_router
@@ -113,6 +114,7 @@ app.include_router(fields_router)
 app.include_router(crop_cycles_router)
 app.include_router(pnl_router)
 app.include_router(prep_cost_allocations_router)
+app.include_router(seasons_router)
 app.include_router(task_router)
 app.include_router(work_order_router)
 app.include_router(work_order_resource_router)
