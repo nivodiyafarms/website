@@ -256,7 +256,7 @@ export default function GeneralPurpose() {
           </thead>
           <tbody>
             {expenses.map((exp) => (
-              <tr key={exp.id} className="border-t">
+              <tr key={exp.general_expense_id} className="border-t">
                 <td className="p-2">{exp.category}</td>
                 <td className="p-2">{exp.subcategory ?? ""}</td>
                 <td className="p-2">₹ {exp.total_cost != null ? Number(exp.total_cost).toLocaleString() : "0"}</td>
