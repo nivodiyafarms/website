@@ -67,29 +67,13 @@ export const fieldAPI = {
 };
 
 /* ======================
-   CROPS
+   SEASONS
 ====================== */
 
-export const cropAPI = {
-  getAll: () => api.get("/crops/"),
-};
-
-/* ======================
-   MATERIALS
-====================== */
-
-export const materialAPI = {
-  getAll: () => api.get("/materials/"),
-  create: (data) => api.post("/materials/", data),
-};
-
-/* ======================
-   EQUIPMENT
-====================== */
-
-export const equipmentAPI = {
-  getAll: () => api.get("/equipment/"),
-  create: (data) => api.post("/equipment/", data),
+export const seasonsAPI = {
+  getSummary: () => api.get("/seasons/summary"),
+  getSeasonSummary: (season, crop_year) =>
+    api.get(`/seasons/${season}/${crop_year}/summary`),
 };
 
 /* ======================
