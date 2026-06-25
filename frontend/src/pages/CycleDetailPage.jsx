@@ -13,12 +13,12 @@
  * TODO(auth-slice-6): gate this screen to supervisor/owner role — financial data.
  * TODO(3c): render sales + yield line items once list endpoints exist.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
 import api from '../services/api';
 import { ProfitDisplay, formatMoney } from '../utils/money';
-import { SEASONS, CYCLE_DETAIL_STRINGS as S } from '../strings/hi';
+import { SEASONS, CYCLE_DETAIL_STRINGS as S, SALE_CHANNELS } from '../strings/hi';
 
 // ── Breakdown row (cost/revenue lines — no arrow, just color) ─────────────────
 function MoneyLine({ label, amount, className = '' }) {
@@ -54,20 +54,40 @@ export default function CycleDetailPage() {
 
   const [pnl, setPnl]             = useState(null);
   const [detail, setDetail]       = useState(null);
+  const [sales, setSales]         = useState([]);
   const [status, setStatus]       = useState('loading');
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
-  useEffect(() => {
-    Promise.all([
+  const fetchAll = useCallback(() => {
+    return Promise.all([
       api.get(`/crop-cycles/${crop_cycle_id}/pnl`),
       api.get(`/crop-cycles/${crop_cycle_id}`),
+      api.get(`/sales?crop_cycle_id=${crop_cycle_id}`),
     ])
-      .then(([pnlRes, detailRes]) => {
+      .then(([pnlRes, detailRes, salesRes]) => {
         setPnl(pnlRes.data);
         setDetail(detailRes.data);
+        setSales(salesRes.data ?? []);
         setStatus('ok');
       })
       .catch(() => setStatus('error'));
   }, [crop_cycle_id]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  async function handleDelete(saleId) {
+    setDeleteLoading(true);
+    try {
+      await api.delete(`/sales/${saleId}`);
+      setSales(prev => prev.filter(s => s.sale_id !== saleId));
+      // Re-fetch PnL so hero numbers update immediately
+      api.get(`/crop-cycles/${crop_cycle_id}/pnl`).then(r => setPnl(r.data)).catch(() => {});
+    } finally {
+      setDeleteLoading(false);
+      setDeletingId(null);
+    }
+  }
 
   if (status === 'loading') {
     return (
@@ -204,8 +224,98 @@ export default function CycleDetailPage() {
 
       {/* ── SALES ──────────────────────────────────────────────────────────── */}
       <Section title={S.salesHeading}>
-        {/* TODO(3c): replace with sales list once GET /api/crop-cycles/{id}/sales exists */}
-        <p className="text-sm text-gray-400 py-3">{S.noSales}</p>
+        {sales.length === 0 ? (
+          <p className="text-sm text-gray-400 py-3">{S.noSales}</p>
+        ) : (
+          sales.map(sale => {
+            const channelLabel = SALE_CHANNELS[sale.channel] ?? sale.channel;
+            const isDeleting   = deletingId === sale.sale_id;
+            return (
+              <div key={sale.sale_id}>
+                <div className="flex items-start justify-between py-2.5 gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="text-sm text-gray-800 font-medium">
+                        {sale.buyer || '—'}
+                      </span>
+                      <span className="text-xs text-gray-400">{channelLabel}</span>
+                      <span className="text-xs text-gray-400">{sale.sale_date}</span>
+                      <span className="text-xs text-gray-400">
+                        {sale.quantity} {sale.unit} @ ₹{sale.rate}
+                      </span>
+                    </div>
+                    {sale.notes && (
+                      <p className="text-xs text-gray-400 italic mt-0.5 truncate">
+                        {sale.notes}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-sm font-semibold text-green-700 tabular-nums">
+                      {formatMoney(sale.total_amount).formatted}
+                    </span>
+                    <button
+                      onClick={() => navigate(
+                        `/cycle/${crop_cycle_id}/sales/${sale.sale_id}/edit`,
+                        { state: { season, crop_year: ctx.crop_year, crop_name, seed_category: seed_cat, sale } }
+                      )}
+                      className="text-xs text-blue-600 hover:text-blue-800 px-1.5 py-0.5
+                        rounded hover:bg-blue-50 transition-colors"
+                    >
+                      {S.editSale}
+                    </button>
+                    <button
+                      onClick={() => setDeletingId(sale.sale_id)}
+                      className="text-xs text-red-500 hover:text-red-700 px-1.5 py-0.5
+                        rounded hover:bg-red-50 transition-colors"
+                    >
+                      {S.deleteSale}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Inline delete confirm */}
+                {isDeleting && (
+                  <div className="flex items-center justify-between bg-red-50 rounded-lg
+                    px-3 py-2.5 mb-1 gap-3">
+                    <span className="text-sm text-red-700 font-medium">{S.deleteConfirm}</span>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleDelete(sale.sale_id)}
+                        disabled={deleteLoading}
+                        className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700
+                          px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                      >
+                        {S.deleteYes}
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(null)}
+                        disabled={deleteLoading}
+                        className="text-xs font-semibold text-gray-600 bg-white border border-gray-300
+                          hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        {S.deleteNo}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+        <div className="pt-2 pb-1 border-t border-gray-100 mt-1">
+          <button
+            onClick={() => navigate(
+              `/cycle/${crop_cycle_id}/sales/new`,
+              { state: { season, crop_year: ctx.crop_year, crop_name, seed_category: seed_cat } }
+            )}
+            className="flex items-center gap-1.5 text-sm font-medium text-green-700
+              hover:text-green-800 py-1"
+          >
+            <Plus className="w-4 h-4" />
+            {S.addSale}
+          </button>
+        </div>
       </Section>
 
       {/* ── YIELDS ─────────────────────────────────────────────────────────── */}

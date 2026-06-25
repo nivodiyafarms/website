@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
 import os
+import logging
 
 from app.database import engine
 
@@ -20,6 +21,7 @@ from app.api.general_expenses import router as general_expenses_router
 from app.api import notes
 from app.api.pnl import router as pnl_router
 from app.api.prep_cost_allocations import router as prep_cost_allocations_router
+from app.api.sales import router as sales_router
 from app.api.seasons import router as seasons_router
 from app.routes.task import router as task_router
 from app.routes.work_order import router as work_order_router
@@ -50,6 +52,31 @@ app = FastAPI(
     description="Backend API for Nivodiya Farms",
     version="1.0.0",
 )
+
+
+@app.on_event("startup")
+def _print_db_banner():
+    from app.core.config import settings
+    active  = (settings.DATABASE_URL or "").strip().rstrip("/")
+    staging = (settings.STAGING_DATABASE_URL or "").strip().rstrip("/")
+
+    is_staging = bool(staging) and active == staging
+
+    logger = logging.getLogger("uvicorn")
+    if is_staging:
+        logger.info("")
+        logger.info("✓  connected to STAGING db  ✓")
+        logger.info("   (safe for testing — writes are throwaway)")
+        logger.info("")
+    else:
+        logger.warning("")
+        logger.warning("=" * 55)
+        logger.warning("⚠️   CONNECTED TO PRODUCTION DB   ⚠️")
+        logger.warning("    Do NOT run test / dummy data here.")
+        logger.warning("    Start with DATABASE_URL=\"$STAGING_DATABASE_URL\"")
+        logger.warning("    to use staging instead.")
+        logger.warning("=" * 55)
+        logger.warning("")
 
 # ---------------------------
 # CORS
@@ -116,6 +143,7 @@ app.include_router(fields_router)
 app.include_router(crop_cycles_router)
 app.include_router(pnl_router)
 app.include_router(prep_cost_allocations_router)
+app.include_router(sales_router)
 app.include_router(seasons_router)
 app.include_router(task_router)
 app.include_router(work_order_router)

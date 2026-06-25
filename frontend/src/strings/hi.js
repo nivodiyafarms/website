@@ -87,8 +87,57 @@ export const CYCLE_DETAIL_STRINGS = {
   noSaleYet:     'अभी बिक्री नहीं हुई',
   fieldsHeading: 'खेत',
   salesHeading:  'बिक्री',
+  addSale:       '+ बिक्री जोड़ो',
+  editSale:      'बदलो',
+  deleteSale:    'हटाओ',
+  deleteConfirm: 'यह बिक्री हटानी है?',
+  deleteYes:     'हाँ, हटाओ',
+  deleteNo:      'रहने दो',
   yieldsHeading: 'पैदावार',
   noSales:       'अभी कोई बिक्री नहीं',
   noYields:      'अभी कोई पैदावार दर्ज नहीं',
   acres:         (n) => `${n} एकड़`,
+};
+
+// ── Sales channel labels (shared: cycle detail list + new-sale form) ──────────
+export const SALE_CHANNELS = {
+  mandi:    'मंडी',
+  society:  'सोसायटी',
+  private:  'प्राइवेट',
+  seed_lot: 'बीज लॉट',
+};
+
+// ── Sale units (tap-to-pick list, in display order) ───────────────────────────
+export const SALE_UNITS = [
+  { value: 'quintal', label: 'क्विंटल' },
+  { value: 'kg',      label: 'किलो'    },
+  { value: 'bag',     label: 'बोरी'    },
+];
+
+// ── New sale form ─────────────────────────────────────────────────────────────
+export const NEW_SALE = {
+  title:           'नई बिक्री',
+  editTitle:       'बिक्री बदलो',
+  qty:             'मात्रा',
+  qtyPlaceholder:  'जैसे: 25',
+  unit:            'इकाई',
+  rate:            'भाव (₹ प्रति इकाई)',
+  ratePlaceholder: 'जैसे: 4200',
+  liveTotal:       'कुल रकम',
+  buyer:           'खरीदार',
+  buyerPlaceholder:'खरीदार का नाम',
+  recentBuyers:    'पिछले खरीदार',
+  channel:         'किसको बेचा',
+  date:            'तारीख',
+  notes:           'टिप्पणी',
+  notesPlaceholder:'कोई और जानकारी…',
+  addNotes:        'टिप्पणी जोड़ो',
+  submit:          'बिक्री दर्ज करो',
+  saving:          'दर्ज हो रहा है…',
+  success:         'बिक्री दर्ज हो गई!',
+  errors: {
+    qty:     'मात्रा सही भरो (0 से ज़्यादा)',
+    rate:    'भाव सही भरो (0 से ज़्यादा)',
+    channel: 'किसको बेचा — चुनो',
+  },
 };
