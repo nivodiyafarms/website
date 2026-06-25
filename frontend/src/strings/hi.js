@@ -54,5 +54,41 @@ export const COMING_SOON = {
 export const GENERAL = {
   logout:          'बाहर निकलो',
   loading:         'लोड हो रहा है…',
+  error:           'कुछ गड़बड़ हो गई।',
+  salePending:     'बिक्री बाकी',
   voiceComingSoon: 'आवाज़ से जोड़ना — जल्द आ रहा है',
+};
+
+// ── Season detail — crops list ─────────────────────────────────────────────────
+export const SEASON_DETAIL_CROPS = {
+  back:            'सभी मौसम',
+  cycleCount:      (n) => `${n} ${n === 1 ? 'किस्म' : 'किस्में'}`,
+  prepHeading:     'खेत की तैयारी का खर्चा',
+  prepTotal:       'कुल खर्चा',
+  prepAllocated:   'फसलों में डाला',
+  prepUnallocated: 'बिना फसल के',
+};
+
+// ── Variety list (crop has >1 cycle) ──────────────────────────────────────────
+export const VARIETY_LIST_STRINGS = {
+  back:  'वापस',
+  acres: (n) => `${n} एकड़`,
+};
+
+// ── Cycle detail (P&L screen) ─────────────────────────────────────────────────
+export const CYCLE_DETAIL_STRINGS = {
+  back:          'वापस',
+  pnlTitle:      'मुनाफ़ा / नुकसान',
+  revenue:       'आमदनी',
+  cropCost:      'फसल का खर्चा',
+  prepCost:      'तैयारी का खर्चा',
+  profit:        'मुनाफ़ा',
+  loss:          'नुकसान',
+  noSaleYet:     'अभी बिक्री नहीं हुई',
+  fieldsHeading: 'खेत',
+  salesHeading:  'बिक्री',
+  yieldsHeading: 'पैदावार',
+  noSales:       'अभी कोई बिक्री नहीं',
+  noYields:      'अभी कोई पैदावार दर्ज नहीं',
+  acres:         (n) => `${n} एकड़`,
 };

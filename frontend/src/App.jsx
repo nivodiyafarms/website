@@ -5,7 +5,9 @@ import PrivateRoute from './utils/PrivateRoute';
 import AppShell from './components/AppShell';
 import Login from './pages/Login';
 import SeasonsPage from './pages/SeasonsPage';
-import SeasonDetailStub from './pages/SeasonDetailStub';
+import SeasonDetailPage from './pages/SeasonDetailPage';
+import CropVarietyPage from './pages/CropVarietyPage';
+import CycleDetailPage from './pages/CycleDetailPage';
 import ComingSoon from './pages/ComingSoon';
 import GeneralPurpose from './pages/GeneralPurpose';
 import FarmMap from './pages/FarmMap';
@@ -28,9 +30,11 @@ function App() {
           <Route path="/login" element={<Login />} />
 
           {/* ── Primary nav destinations ───────────────────────────────── */}
-          <Route path="/seasons"                  element={<Shell><SeasonsPage /></Shell>} />
-          <Route path="/season/:season/:crop_year" element={<Shell><SeasonDetailStub /></Shell>} />
-          <Route path="/fields"                   element={<Shell><ComingSoon /></Shell>} />
+          <Route path="/seasons"                                            element={<Shell><SeasonsPage /></Shell>} />
+          <Route path="/season/:season/:crop_year"                          element={<Shell><SeasonDetailPage /></Shell>} />
+          <Route path="/season/:season/:crop_year/crop/:crop_name"          element={<Shell><CropVarietyPage /></Shell>} />
+          <Route path="/cycle/:crop_cycle_id"                               element={<Shell><CycleDetailPage /></Shell>} />
+          <Route path="/fields"                                             element={<Shell><ComingSoon /></Shell>} />
           <Route path="/general-purpose"          element={<Shell><GeneralPurpose /></Shell>} />
           <Route path="/farm-map"                 element={<Shell><FarmMap /></Shell>} />
 
