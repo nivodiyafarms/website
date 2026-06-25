@@ -9,6 +9,7 @@ import SeasonDetailPage from './pages/SeasonDetailPage';
 import CropVarietyPage from './pages/CropVarietyPage';
 import CycleDetailPage from './pages/CycleDetailPage';
 import NewSalePage from './pages/NewSalePage';
+import NewYieldPage from './pages/NewYieldPage';
 import ComingSoon from './pages/ComingSoon';
 import GeneralPurpose from './pages/GeneralPurpose';
 import FarmMap from './pages/FarmMap';
@@ -37,6 +38,8 @@ function App() {
           <Route path="/cycle/:crop_cycle_id"                               element={<Shell><CycleDetailPage /></Shell>} />
           <Route path="/cycle/:crop_cycle_id/sales/new"                    element={<Shell><NewSalePage /></Shell>} />
           <Route path="/cycle/:crop_cycle_id/sales/:sale_id/edit"         element={<Shell><NewSalePage /></Shell>} />
+          <Route path="/cycle/:crop_cycle_id/yields/new"                  element={<Shell><NewYieldPage /></Shell>} />
+          <Route path="/cycle/:crop_cycle_id/yields/:yield_id/edit"       element={<Shell><NewYieldPage /></Shell>} />
           <Route path="/fields"                                             element={<Shell><ComingSoon /></Shell>} />
           <Route path="/general-purpose"          element={<Shell><GeneralPurpose /></Shell>} />
           <Route path="/farm-map"                 element={<Shell><FarmMap /></Shell>} />

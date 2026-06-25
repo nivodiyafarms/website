@@ -18,7 +18,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
 import api from '../services/api';
 import { ProfitDisplay, formatMoney } from '../utils/money';
-import { SEASONS, CYCLE_DETAIL_STRINGS as S, SALE_CHANNELS } from '../strings/hi';
+import { SEASONS, CYCLE_DETAIL_STRINGS as S, SALE_CHANNELS, YIELD_LIST as YS, QUALITY_GRADES } from '../strings/hi';
 
 // ── Breakdown row (cost/revenue lines — no arrow, just color) ─────────────────
 function MoneyLine({ label, amount, className = '' }) {
@@ -55,20 +55,29 @@ export default function CycleDetailPage() {
   const [pnl, setPnl]             = useState(null);
   const [detail, setDetail]       = useState(null);
   const [sales, setSales]         = useState([]);
+  const [yields, setYields]       = useState([]);
   const [status, setStatus]       = useState('loading');
-  const [deletingId, setDeletingId] = useState(null);
+
+  // Sales delete state
+  const [deletingId, setDeletingId]       = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Yields delete state
+  const [deletingYieldId, setDeletingYieldId]         = useState(null);
+  const [deleteYieldLoading, setDeleteYieldLoading]   = useState(false);
 
   const fetchAll = useCallback(() => {
     return Promise.all([
       api.get(`/crop-cycles/${crop_cycle_id}/pnl`),
       api.get(`/crop-cycles/${crop_cycle_id}`),
       api.get(`/sales?crop_cycle_id=${crop_cycle_id}`),
+      api.get(`/yields?crop_cycle_id=${crop_cycle_id}`),
     ])
-      .then(([pnlRes, detailRes, salesRes]) => {
+      .then(([pnlRes, detailRes, salesRes, yieldsRes]) => {
         setPnl(pnlRes.data);
         setDetail(detailRes.data);
         setSales(salesRes.data ?? []);
+        setYields(yieldsRes.data ?? []);
         setStatus('ok');
       })
       .catch(() => setStatus('error'));
@@ -81,11 +90,21 @@ export default function CycleDetailPage() {
     try {
       await api.delete(`/sales/${saleId}`);
       setSales(prev => prev.filter(s => s.sale_id !== saleId));
-      // Re-fetch PnL so hero numbers update immediately
       api.get(`/crop-cycles/${crop_cycle_id}/pnl`).then(r => setPnl(r.data)).catch(() => {});
     } finally {
       setDeleteLoading(false);
       setDeletingId(null);
+    }
+  }
+
+  async function handleDeleteYield(yieldId) {
+    setDeleteYieldLoading(true);
+    try {
+      await api.delete(`/yields/${yieldId}`);
+      setYields(prev => prev.filter(y => y.yield_id !== yieldId));
+    } finally {
+      setDeleteYieldLoading(false);
+      setDeletingYieldId(null);
     }
   }
 
@@ -320,8 +339,96 @@ export default function CycleDetailPage() {
 
       {/* ── YIELDS ─────────────────────────────────────────────────────────── */}
       <Section title={S.yieldsHeading}>
-        {/* TODO(3c): replace with yields list once GET /api/crop-cycles/{id}/yields exists */}
-        <p className="text-sm text-gray-400 py-3">{S.noYields}</p>
+        {yields.length === 0 ? (
+          <p className="text-sm text-gray-400 py-3">{S.noYields}</p>
+        ) : (
+          yields.map(y => {
+            const isDeletingY  = deletingYieldId === y.yield_id;
+            const gradeLabel   = QUALITY_GRADES.find(g => g.value === y.quality_grade)?.label ?? y.quality_grade;
+            return (
+              <div key={y.yield_id}>
+                <div className="flex items-start justify-between py-2.5 gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="text-sm font-semibold text-gray-800">
+                        {y.quantity} {y.unit}
+                      </span>
+                      {gradeLabel && (
+                        <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                          {gradeLabel}
+                        </span>
+                      )}
+                      {y.field_id && (
+                        <span className="text-xs text-gray-400">{y.field_id}</span>
+                      )}
+                      <span className="text-xs text-gray-400">{y.harvest_date}</span>
+                    </div>
+                    {y.notes && (
+                      <p className="text-xs text-gray-400 italic mt-0.5 truncate">{y.notes}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => navigate(
+                        `/cycle/${crop_cycle_id}/yields/${y.yield_id}/edit`,
+                        { state: { season, crop_year: ctx.crop_year, crop_name, seed_category: seed_cat, yield: y } }
+                      )}
+                      className="text-xs text-blue-600 hover:text-blue-800 px-1.5 py-0.5
+                        rounded hover:bg-blue-50 transition-colors"
+                    >
+                      {YS.editYield}
+                    </button>
+                    <button
+                      onClick={() => setDeletingYieldId(y.yield_id)}
+                      className="text-xs text-red-500 hover:text-red-700 px-1.5 py-0.5
+                        rounded hover:bg-red-50 transition-colors"
+                    >
+                      {YS.deleteYield}
+                    </button>
+                  </div>
+                </div>
+
+                {isDeletingY && (
+                  <div className="flex items-center justify-between bg-red-50 rounded-lg
+                    px-3 py-2.5 mb-1 gap-3">
+                    <span className="text-sm text-red-700 font-medium">{YS.deleteConfirm}</span>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleDeleteYield(y.yield_id)}
+                        disabled={deleteYieldLoading}
+                        className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700
+                          px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                      >
+                        {YS.deleteYes}
+                      </button>
+                      <button
+                        onClick={() => setDeletingYieldId(null)}
+                        disabled={deleteYieldLoading}
+                        className="text-xs font-semibold text-gray-600 bg-white border border-gray-300
+                          hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        {YS.deleteNo}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+        <div className="pt-2 pb-1 border-t border-gray-100 mt-1">
+          <button
+            onClick={() => navigate(
+              `/cycle/${crop_cycle_id}/yields/new`,
+              { state: { season, crop_year: ctx.crop_year, crop_name, seed_category: seed_cat } }
+            )}
+            className="flex items-center gap-1.5 text-sm font-medium text-green-700
+              hover:text-green-800 py-1"
+          >
+            <Plus className="w-4 h-4" />
+            {YS.addYield}
+          </button>
+        </div>
       </Section>
 
     </div>

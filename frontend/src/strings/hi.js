@@ -114,6 +114,44 @@ export const SALE_UNITS = [
   { value: 'bag',     label: 'बोरी'    },
 ];
 
+// ── Quality grade options (shared: yield form + display) ─────────────────────
+export const QUALITY_GRADES = [
+  { value: 'A',      label: 'अच्छा'   },
+  { value: 'B',      label: 'मध्यम'   },
+  { value: 'C',      label: 'कमज़ोर'  },
+];
+
+// ── New yield form ────────────────────────────────────────────────────────────
+export const NEW_YIELD = {
+  title:            'नई पैदावार',
+  editTitle:        'पैदावार बदलो',
+  qty:              'मात्रा',
+  qtyPlaceholder:   'जैसे: 80',
+  unit:             'इकाई',
+  field:            'कौन सा खेत',
+  fieldAll:         'पूरी फसल',
+  grade:            'दर्जा (वैकल्पिक)',
+  date:             'कटाई की तारीख',
+  addNotes:         'टिप्पणी जोड़ो',
+  notesPlaceholder: 'कोई और जानकारी…',
+  submit:           'पैदावार दर्ज करो',
+  saving:           'दर्ज हो रहा है…',
+  success:          'पैदावार दर्ज हो गई!',
+  errors: {
+    qty: 'मात्रा सही भरो (0 से ज़्यादा)',
+  },
+};
+
+// ── Cycle detail — yield list strings ────────────────────────────────────────
+export const YIELD_LIST = {
+  addYield:       '+ पैदावार जोड़ो',
+  editYield:      'बदलो',
+  deleteYield:    'हटाओ',
+  deleteConfirm:  'यह पैदावार हटानी है?',
+  deleteYes:      'हाँ, हटाओ',
+  deleteNo:       'रहने दो',
+};
+
 // ── New sale form ─────────────────────────────────────────────────────────────
 export const NEW_SALE = {
   title:           'नई बिक्री',
