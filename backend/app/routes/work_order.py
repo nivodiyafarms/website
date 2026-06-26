@@ -76,6 +76,7 @@ def update_work_order(
         raise HTTPException(status_code=404, detail="Work order not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    update_data.pop('assigned_to', None)  # assignment handled separately, never from frontend
     for field, value in update_data.items():
         setattr(work_order, field, value)
 
