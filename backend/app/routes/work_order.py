@@ -40,7 +40,7 @@ def create_work_order(
         work_order_number=work_order_number,
         short_description=payload.short_description,
         description=payload.description,
-        assigned_to=payload.assigned_to,
+        assigned_to=None,  # assignment handled via /assign endpoint; ignore whatever frontend sends
         due_date=payload.due_date,
         created_by=current_user.user_id,
         status=WorkOrderStatus.OPEN,
@@ -76,6 +76,7 @@ def update_work_order(
         raise HTTPException(status_code=404, detail="Work order not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    update_data.pop('assigned_to', None)  # assignment handled via /assign endpoint only
     for field, value in update_data.items():
         setattr(work_order, field, value)
 

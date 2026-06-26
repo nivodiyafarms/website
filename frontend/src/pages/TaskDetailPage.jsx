@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, Paperclip, CheckCircle, Clock, AlertCircle, XCircle, Ban, X } from "lucide-react";
-import { cropCycleAPI, userAPI } from "../services/api";
+import { cropCycleAPI, userAPI, workersAPI, woActionsAPI } from "../services/api";
+import { WO_STATUSES, WO_STATUS_COLORS, WO_ACTIONS } from "../strings/hi";
 import { transformTaskRequest } from "../utils/apiTransformers";
 import NotesInterface from "../components/NotesInterface";
 import { useAuth } from "../contexts/AuthContext";
@@ -70,6 +71,13 @@ const TaskDetailPage = () => {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Workers (for assign picker)
+  const [activeWorkers, setActiveWorkers] = useState([]);
+
+  // WO action state
+  const [assigningWoId, setAssigningWoId]   = useState(null); // WO showing the assign picker
+  const [woActionLoading, setWoActionLoading] = useState(null); // woId with in-flight action
 
   // Work Orders state
   const [taskWorkOrders, setTaskWorkOrders] = useState([]);
@@ -148,6 +156,7 @@ const TaskDetailPage = () => {
 
   useEffect(() => {
     userAPI.getAll().then((res) => setUsers(res.data || [])).catch(() => setUsers([]));
+    workersAPI.list().then((res) => setActiveWorkers((res.data || []).filter(w => w.active))).catch(() => {});
   }, []);
 
   const loadTaskData = async () => {
@@ -264,19 +273,53 @@ const TaskDetailPage = () => {
     }
   };
 
-  // Helper function to get work order status color
-  const getWorkOrderStatusColor = (status) => {
-    const statusUpper = status?.toUpperCase();
-    const colors = {
-      OPEN: 'bg-green-100 text-green-800',
-      IN_PROGRESS: 'bg-yellow-100 text-yellow-800',
-      ON_HOLD: 'bg-orange-100 text-orange-800',
-      COMPLETED: 'bg-blue-100 text-blue-800',
-      PARTIAL: 'bg-purple-100 text-purple-800',
-      CLOSED: 'bg-gray-100 text-gray-800',
-      CANCELLED: 'bg-red-100 text-red-800',
-    };
-    return colors[statusUpper] || 'bg-gray-100 text-gray-800';
+  // Hindi label + color from hi.js (never shows raw token)
+  const woStatusLabel = (s) => WO_STATUSES[s] ?? s;
+  const woStatusColor = (s) => WO_STATUS_COLORS[s] ?? 'bg-gray-100 text-gray-700';
+
+  // Role check: admin/owner/supervisor can close/reopen
+  const canSupervise = ['admin', 'owner', 'supervisor'].includes(currentUser?.role);
+
+  // WO action handlers
+  const handleAssign = async (woId, workerId) => {
+    setWoActionLoading(woId);
+    try {
+      const res = await woActionsAPI.assign(woId, workerId);
+      setTaskWorkOrders(prev => prev.map(w => w.work_order_id === woId ? res.data : w));
+      setAssigningWoId(null);
+    } catch (err) {
+      alert(err.response?.data?.detail || 'सौंपने में गड़बड़ हो गई।');
+    } finally { setWoActionLoading(null); }
+  };
+
+  const handleSubmitCompletion = async (woId) => {
+    setWoActionLoading(woId);
+    try {
+      const res = await woActionsAPI.submitCompletion(woId, null);
+      setTaskWorkOrders(prev => prev.map(w => w.work_order_id === woId ? res.data : w));
+    } catch (err) {
+      alert(err.response?.data?.detail || 'सबमिट में गड़बड़ हो गई।');
+    } finally { setWoActionLoading(null); }
+  };
+
+  const handleCloseWO = async (woId) => {
+    setWoActionLoading(woId);
+    try {
+      const res = await woActionsAPI.close(woId);
+      setTaskWorkOrders(prev => prev.map(w => w.work_order_id === woId ? res.data : w));
+    } catch (err) {
+      alert(err.response?.data?.detail || 'बंद करने में गड़बड़ हो गई।');
+    } finally { setWoActionLoading(null); }
+  };
+
+  const handleReopenWO = async (woId) => {
+    setWoActionLoading(woId);
+    try {
+      const res = await woActionsAPI.reopen(woId);
+      setTaskWorkOrders(prev => prev.map(w => w.work_order_id === woId ? res.data : w));
+    } catch (err) {
+      alert(err.response?.data?.detail || 'वापस भेजने में गड़बड़ हो गई।');
+    } finally { setWoActionLoading(null); }
   };
 
   if (loading) {
@@ -583,41 +626,153 @@ const TaskDetailPage = () => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {taskWorkOrders.map((workOrder) => (
-                    <div
-                      key={workOrder.work_order_id}
-                      onClick={() => setActiveWorkOrder(workOrder)}
-                      className="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 hover:shadow-sm transition cursor-pointer"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
+                  {taskWorkOrders.map((workOrder) => {
+                    const woId = workOrder.work_order_id;
+                    const st = workOrder.status;
+                    const isActing = woActionLoading === woId;
+                    const isPendingReview = st === 'pending_review';
+                    const isClosed = st === 'closed' || st === 'cancelled';
+                    const isShowingAssign = assigningWoId === woId;
+
+                    // Find assigned worker name from our workers list
+                    const assignedWorker = workOrder.assigned_to
+                      ? activeWorkers.find(w => w.worker_id === workOrder.assigned_to)
+                      : null;
+
+                    return (
+                      <div
+                        key={woId}
+                        className="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 hover:shadow-sm transition"
+                      >
+                        {/* Header row */}
+                        <div className="flex items-start justify-between mb-2 cursor-pointer"
+                             onClick={() => setActiveWorkOrder(workOrder)}>
+                          <div className="flex items-center gap-3 flex-wrap">
                             <h4 className="font-semibold text-gray-900">
                               {workOrder.work_order_number || 'N/A'}
                             </h4>
-                            <span className={`px-2 py-1 rounded text-xs font-semibold ${getWorkOrderStatusColor(workOrder.status)}`}>
-                              {workOrder.status || 'N/A'}
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${woStatusColor(st)}`}>
+                              {woStatusLabel(st)}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-700 mb-2">
-                            {workOrder.short_description || 'No description'}
-                          </p>
-                          <div className="flex items-center gap-4 text-xs text-gray-500">
-                            {workOrder.due_date && (
-                              <span>
-                                अंतिम तिथि: {new Date(workOrder.due_date).toLocaleDateString()}
-                              </span>
+                        </div>
+
+                        {/* Description */}
+                        <p className="text-sm text-gray-700 mb-2 cursor-pointer"
+                           onClick={() => setActiveWorkOrder(workOrder)}>
+                          {workOrder.short_description || 'No description'}
+                        </p>
+
+                        {/* Assigned worker + assign control */}
+                        <div className="mb-2">
+                          {assignedWorker ? (
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <span>{WO_ACTIONS.assignedTo}</span>
+                              <span className="font-semibold text-gray-700">{assignedWorker.name}</span>
+                              {!isClosed && (
+                                <button
+                                  onClick={() => setAssigningWoId(isShowingAssign ? null : woId)}
+                                  className="text-blue-500 hover:text-blue-700 underline"
+                                >{WO_ACTIONS.changeAssign}</button>
+                              )}
+                            </div>
+                          ) : !isClosed ? (
+                            <button
+                              onClick={() => setAssigningWoId(isShowingAssign ? null : woId)}
+                              className="text-xs text-orange-600 hover:text-orange-700 font-medium underline"
+                            >{WO_ACTIONS.assign}</button>
+                          ) : null}
+
+                          {/* Inline worker picker */}
+                          {isShowingAssign && (
+                            <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                              <p className="text-xs font-semibold text-gray-600 mb-2">{WO_ACTIONS.assignTo}</p>
+                              <div className="flex flex-wrap gap-2">
+                                {activeWorkers.map(w => (
+                                  <button
+                                    key={w.worker_id}
+                                    disabled={isActing}
+                                    onClick={() => handleAssign(woId, w.worker_id)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition
+                                      ${workOrder.assigned_to === w.worker_id
+                                        ? 'bg-orange-500 text-white border-orange-500'
+                                        : 'bg-white text-gray-700 border-gray-300 hover:border-orange-400'
+                                      } disabled:opacity-50`}
+                                  >
+                                    {w.name}
+                                  </button>
+                                ))}
+                                <button
+                                  onClick={() => setAssigningWoId(null)}
+                                  className="px-3 py-1.5 rounded-lg text-xs text-gray-400 border border-gray-200 hover:bg-gray-100"
+                                >{WO_ACTIONS.cancelAssign}</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action buttons row */}
+                        {!isClosed && (
+                          <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-gray-100">
+                            {/* Submit completion — any logged-in user (worker role in future) */}
+                            {!isPendingReview && (
+                              <button
+                                disabled={isActing}
+                                onClick={() => handleSubmitCompletion(woId)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600 text-white
+                                  hover:bg-green-700 disabled:opacity-50 transition"
+                              >
+                                {isActing ? WO_ACTIONS.submitting : WO_ACTIONS.submitCompletion}
+                              </button>
                             )}
-                            {workOrder.created_at && (
-                              <span>
-                                बनाया गया: {new Date(workOrder.created_at).toLocaleDateString()}
+
+                            {/* Supervisor: close pending_review */}
+                            {isPendingReview && canSupervise && (
+                              <>
+                                <span className="text-xs text-amber-700 font-medium">
+                                  {WO_ACTIONS.pendingReviewNote}
+                                </span>
+                                <button
+                                  disabled={isActing}
+                                  onClick={() => handleCloseWO(woId)}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-white
+                                    hover:bg-gray-900 disabled:opacity-50 transition"
+                                >
+                                  {isActing ? WO_ACTIONS.closing : WO_ACTIONS.closeWO}
+                                </button>
+                                <button
+                                  disabled={isActing}
+                                  onClick={() => handleReopenWO(woId)}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-orange-400
+                                    text-orange-600 hover:bg-orange-50 disabled:opacity-50 transition"
+                                >
+                                  {isActing ? WO_ACTIONS.reopening : WO_ACTIONS.reopenWO}
+                                </button>
+                              </>
+                            )}
+
+                            {/* Non-supervisor sees the pending note but no close button */}
+                            {isPendingReview && !canSupervise && (
+                              <span className="text-xs text-amber-700 font-medium">
+                                {WO_ACTIONS.pendingReviewNote}
                               </span>
                             )}
                           </div>
+                        )}
+
+                        {/* Date metadata */}
+                        <div className="flex items-center gap-4 text-xs text-gray-400 mt-2 cursor-pointer"
+                             onClick={() => setActiveWorkOrder(workOrder)}>
+                          {workOrder.due_date && (
+                            <span>अंतिम तिथि: {new Date(workOrder.due_date).toLocaleDateString('hi-IN')}</span>
+                          )}
+                          {workOrder.created_at && (
+                            <span>बनाया: {new Date(workOrder.created_at).toLocaleDateString('hi-IN')}</span>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

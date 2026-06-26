@@ -25,6 +25,7 @@ from app.api.sales import router as sales_router
 from app.api.seasons import router as seasons_router
 from app.api.yields import router as yields_router
 from app.api.workers import router as workers_router
+from app.api.work_order_actions import router as wo_actions_router
 from app.routes.task import router as task_router
 from app.routes.work_order import router as work_order_router
 from app.routes.work_order_resource import router as work_order_resource_router
@@ -87,9 +88,11 @@ vercel_frontend = os.getenv("FRONTEND_URL")
 origins = [
     "http://localhost:3000",
     "http://localhost:3001",
+    "http://localhost:3002",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
     "http://127.0.0.1:5173",
 ]
 if vercel_frontend:
@@ -153,6 +156,7 @@ app.include_router(work_order_router)
 app.include_router(work_order_resource_router)
 app.include_router(general_expenses_router)
 app.include_router(workers_router)
+app.include_router(wo_actions_router)
 app.include_router(notes.router)
 
 # ---------------------------

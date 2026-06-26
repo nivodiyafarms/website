@@ -6,6 +6,46 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+// ── Work-order status labels (raw token → Hindi; NEVER show raw tokens to users) ──
+export const WO_STATUSES = {
+  open:           'खुला',
+  in_progress:    'चल रहा है',
+  on_hold:        'रोक पर',
+  completed:      'पूरा हुआ',
+  pending_review: 'समीक्षा बाकी',   // worker submitted; awaiting supervisor
+  partial:        'आंशिक',
+  closed:         'बंद',
+  cancelled:      'रद्द',
+};
+
+// Color classes per WO status (Tailwind)
+export const WO_STATUS_COLORS = {
+  open:           'bg-green-100 text-green-800',
+  in_progress:    'bg-yellow-100 text-yellow-800',
+  on_hold:        'bg-orange-100 text-orange-800',
+  completed:      'bg-blue-100 text-blue-800',
+  pending_review: 'bg-amber-100 text-amber-800',
+  partial:        'bg-purple-100 text-purple-800',
+  closed:         'bg-gray-100 text-gray-700',
+  cancelled:      'bg-red-100 text-red-800',
+};
+
+// WO assignment / completion flow
+export const WO_ACTIONS = {
+  assign:             'सौंपो',
+  assignTo:           'किसे सौंपें?',
+  changeAssign:       'बदलो',
+  assignedTo:         'सौंपा:',
+  submitCompletion:   'काम पूरा हुआ',
+  submitting:         'सबमिट हो रहा है…',
+  closeWO:            'बंद करो',
+  closing:            'बंद हो रहा है…',
+  reopenWO:           'वापस भेजो',
+  reopening:          'वापस हो रहा है…',
+  cancelAssign:       'रद्द',
+  pendingReviewNote:  'समीक्षा बाकी — सुपरवाइज़र बंद करेगा',
+};
+
 // ── App shell ─────────────────────────────────────────────────────────────────
 export const APP_NAME        = 'निवोदिया फ़ार्म्स';
 export const APP_TAGLINE     = 'Farm Management';

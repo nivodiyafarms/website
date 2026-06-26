@@ -137,6 +137,25 @@ const _cropCycleAPI = {
 };
 
 /* ======================
+   WORKERS
+====================== */
+
+export const workersAPI = {
+  list: () => api.get("/workers/"),
+};
+
+/* ======================
+   WORK ORDER LIFECYCLE ACTIONS
+====================== */
+
+export const woActionsAPI = {
+  assign:            (woId, workerId) => api.patch(`/work-orders/${woId}/assign`, { worker_id: workerId }),
+  submitCompletion:  (woId, notes)    => api.patch(`/work-orders/${woId}/submit-completion`, { notes: notes ?? null }),
+  close:             (woId)           => api.patch(`/work-orders/${woId}/close`),
+  reopen:            (woId)           => api.patch(`/work-orders/${woId}/reopen`),
+};
+
+/* ======================
    EXPORT ALIASES (CRITICAL)
 ====================== */
 
