@@ -114,6 +114,26 @@ export const SALE_UNITS = [
   { value: 'bag',     label: 'बोरी'    },
 ];
 
+// ── Fields list + field detail ───────────────────────────────────────────────
+export const FIELDS_PAGE = {
+  heading:        'खेत',
+  loading:        'लोड हो रहा है…',
+  error:          'कुछ गड़बड़ हो गई।',
+  empty:          'कोई खेत नहीं मिला।',
+  prepCostLabel:  'तैयारी का खर्चा',
+  acres:          (n) => `${n} एकड़`,
+};
+
+export const FIELD_DETAIL = {
+  back:             'सभी खेत',
+  prepHeading:      'खेत की तैयारी का खर्चा',
+  prepSubLabel:     'जमीन पर लगी लागत — किसी फसल से नहीं जोड़ी अभी',
+  totalPrepCost:    'कुल खर्चा',
+  untagged:         'किसी सीज़न में नहीं डाला',
+  emptyState:       'अभी कोई खेत की तैयारी का काम नहीं',
+  acres:            (n) => `${n} एकड़`,
+};
+
 // ── Quality grade options (shared: yield form + display) ─────────────────────
 export const QUALITY_GRADES = [
   { value: 'A',      label: 'अच्छा'   },
@@ -148,6 +168,48 @@ export const YIELD_LIST = {
   editYield:      'बदलो',
   deleteYield:    'हटाओ',
   deleteConfirm:  'यह पैदावार हटानी है?',
+  deleteYes:      'हाँ, हटाओ',
+  deleteNo:       'रहने दो',
+};
+
+// ── Prep-WO form ──────────────────────────────────────────────────────────────
+export const PREP_RESOURCE_TYPES = [
+  { value: 'labor',    label: 'मज़दूरी'  },
+  { value: 'machine',  label: 'ट्रैक्टर' },
+  { value: 'fuel',     label: 'डीज़ल'   },
+  { value: 'material', label: 'सामान'   },
+  { value: 'other',    label: 'अन्य'    },
+];
+
+export const NEW_PREP_WO = {
+  title:             'खेत तैयारी का काम',
+  editTitle:         'काम बदलो',
+  descLabel:         'काम का विवरण',
+  descPlaceholder:   'जैसे: जुताई, लेवलिंग, खाद डाली…',
+  seasonLabel:       'सीज़न',
+  yearLabel:         'साल',
+  resourcesLabel:    'लागत (कम से कम एक)',
+  addResource:       '+ लागत जोड़ो',
+  resourceName:      'विवरण (जैसे: 2 मज़दूर, डीज़ल 10L)',
+  resourceCost:      'राशि (₹)',
+  removeResource:    '✕',
+  liveTotal:         'कुल लागत',
+  submit:            'दर्ज करो',
+  saving:            'दर्ज हो रहा है…',
+  success:           'काम दर्ज हो गया!',
+  errors: {
+    desc:      'काम का विवरण भरो',
+    noRes:     'कम से कम एक लागत लाइन चाहिए',
+    resCost:   'राशि 0 से ज़्यादा होनी चाहिए',
+    resName:   'विवरण भरो',
+  },
+};
+
+export const FIELD_DETAIL_PREP = {
+  addBtn:         '+ खेत की तैयारी का काम जोड़ो',
+  editBtn:        'बदलो',
+  deleteBtn:      'हटाओ',
+  deleteConfirm:  'यह काम हटाना है?',
   deleteYes:      'हाँ, हटाओ',
   deleteNo:       'रहने दो',
 };
