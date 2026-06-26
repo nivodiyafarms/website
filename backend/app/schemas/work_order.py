@@ -15,7 +15,7 @@ class WorkOrderCreate(BaseModel):
     # task_id comes from URL path, not body
     short_description: str
     description: Optional[str] = None
-    assigned_to: UUID
+    assigned_to: Optional[UUID] = None
     due_date: Optional[date] = None
 
     class Config:
@@ -47,8 +47,8 @@ class WorkOrderResponse(BaseModel):
     short_description: str
     description: Optional[str]
 
-    assigned_to: UUID
-    created_by: UUID
+    assigned_to: Optional[UUID] = None
+    created_by: Optional[UUID] = None
 
     status: WorkOrderStatus
     due_date: Optional[date]

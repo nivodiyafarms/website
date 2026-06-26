@@ -40,7 +40,7 @@ def create_work_order(
         work_order_number=work_order_number,
         short_description=payload.short_description,
         description=payload.description,
-        assigned_to=payload.assigned_to,
+        assigned_to=None,
         due_date=payload.due_date,
         created_by=current_user.user_id,
         status=WorkOrderStatus.OPEN,
