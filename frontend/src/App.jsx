@@ -13,6 +13,8 @@ import NewYieldPage from './pages/NewYieldPage';
 import FieldsPage from './pages/FieldsPage';
 import FieldDetailPage from './pages/FieldDetailPage';
 import NewPrepWOPage from './pages/NewPrepWOPage';
+import WorkersPage from './pages/WorkersPage';
+import NewWorkerPage from './pages/NewWorkerPage';
 import ComingSoon from './pages/ComingSoon';
 import GeneralPurpose from './pages/GeneralPurpose';
 import FarmMap from './pages/FarmMap';
@@ -47,6 +49,9 @@ function App() {
           <Route path="/fields/:field_id"                                   element={<Shell><FieldDetailPage /></Shell>} />
           <Route path="/fields/:field_id/prep/new"                         element={<Shell><NewPrepWOPage /></Shell>} />
           <Route path="/fields/:field_id/prep/:work_order_id/edit"         element={<Shell><NewPrepWOPage /></Shell>} />
+          <Route path="/workers"                   element={<Shell><WorkersPage /></Shell>} />
+          <Route path="/workers/new"               element={<Shell><NewWorkerPage /></Shell>} />
+          <Route path="/workers/:worker_id/edit"   element={<Shell><NewWorkerPage /></Shell>} />
           <Route path="/general-purpose"          element={<Shell><GeneralPurpose /></Shell>} />
           <Route path="/farm-map"                 element={<Shell><FarmMap /></Shell>} />
 

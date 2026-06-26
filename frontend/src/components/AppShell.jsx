@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Wheat, MapPin, Receipt, Map, LogOut, Sprout, Mic } from 'lucide-react';
+import { Wheat, MapPin, Receipt, Map, LogOut, Sprout, Mic, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_NAME, APP_TAGLINE, NAV, GENERAL } from '../strings/hi';
 
@@ -70,6 +70,23 @@ export default function AppShell({ children }) {
           })}
         </nav>
 
+        {/* Admin: Workers — supervisor/owner only (TODO(auth): gate in Slice 6) */}
+        <div className="px-3 pb-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-300 px-3 mb-1">
+            Admin
+          </p>
+          <Link to="/workers"
+            className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors
+              ${isActive('/workers')
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-400 hover:bg-gray-50 hover:text-gray-700'
+              }`}
+          >
+            <Users className={`w-4 h-4 flex-shrink-0 ${isActive('/workers') ? 'text-green-600' : 'text-gray-400'}`} />
+            कर्मचारी
+          </Link>
+        </div>
+
         {/* Voice entry placeholder (future Sarvam/WhatsApp) */}
         <div className="mx-3 mb-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
           <button disabled
@@ -106,11 +123,16 @@ export default function AppShell({ children }) {
             </div>
             <span className="text-base font-bold text-gray-900">{APP_NAME}</span>
           </div>
-          {user && (
-            <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500">
-              <LogOut className="w-5 h-5" />
-            </button>
-          )}
+          <div className="flex items-center gap-1">
+            <Link to="/workers" className={`p-2 rounded-lg ${isActive('/workers') ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'}`}>
+              <Users className="w-5 h-5" />
+            </Link>
+            {user && (
+              <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500">
+                <LogOut className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </header>
 
         {/* Page content — pb-20 leaves room above mobile bottom nav */}

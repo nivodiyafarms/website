@@ -24,6 +24,7 @@ from app.api.prep_cost_allocations import router as prep_cost_allocations_router
 from app.api.sales import router as sales_router
 from app.api.seasons import router as seasons_router
 from app.api.yields import router as yields_router
+from app.api.workers import router as workers_router
 from app.routes.task import router as task_router
 from app.routes.work_order import router as work_order_router
 from app.routes.work_order_resource import router as work_order_resource_router
@@ -151,6 +152,7 @@ app.include_router(task_router)
 app.include_router(work_order_router)
 app.include_router(work_order_resource_router)
 app.include_router(general_expenses_router)
+app.include_router(workers_router)
 app.include_router(notes.router)
 
 # ---------------------------

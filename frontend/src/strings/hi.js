@@ -172,6 +172,53 @@ export const YIELD_LIST = {
   deleteNo:       'रहने दो',
 };
 
+// ── Workers admin ─────────────────────────────────────────────────────────────
+export const WORKERS_PAGE = {
+  heading:           'कर्मचारी',
+  addBtn:            '+ कर्मचारी जोड़ो',
+  empty:             'अभी कोई कर्मचारी नहीं — ऊपर जोड़ो।',
+  loading:           'लोड हो रहा है…',
+  error:             'कुछ गड़बड़ हो गई।',
+  active:            'सक्रिय',
+  inactive:          'निष्क्रिय',
+  editBtn:           'बदलो',
+  deactivateBtn:     'बंद करो',
+  activateBtn:       'चालू करो',
+  deactivateConfirm: 'इस कर्मचारी को निष्क्रिय करना है?',
+  deactivateYes:     'हाँ, बंद करो',
+  deactivateNo:      'रहने दो',
+  roles: {
+    worker:     'मज़दूर',
+    supervisor: 'सुपरवाइज़र',
+    owner:      'मालिक',
+  },
+  roleBadgeColors: {
+    worker:     'bg-gray-100 text-gray-600',
+    supervisor: 'bg-blue-50 text-blue-700',
+    owner:      'bg-orange-50 text-orange-700',
+  },
+};
+
+export const NEW_WORKER = {
+  title:               'नया कर्मचारी',
+  editTitle:           'कर्मचारी बदलो',
+  nameLabel:           'नाम',
+  namePlaceholder:     'जैसे: रामलाल वर्मा',
+  phoneLabel:          'WhatsApp नंबर',
+  countryCodeLabel:    'देश कोड',
+  localNumPlaceholder: 'मोबाइल नंबर',
+  phoneHint:           'देश कोड सहित — +91 (भारत), +1 (USA), +44 (UK)',
+  roleLabel:           'भूमिका',
+  submit:              'दर्ज करो',
+  saving:              'दर्ज हो रहा है…',
+  success:             'कर्मचारी दर्ज हो गया!',
+  errors: {
+    name:      'नाम ज़रूरी है',
+    phone:     'नंबर सही नहीं — देश कोड (+91/+1) सहित पूरा नंबर डालो',
+    duplicate: 'यह WhatsApp नंबर पहले से दर्ज है',
+  },
+};
+
 // ── Prep-WO form ──────────────────────────────────────────────────────────────
 export const PREP_RESOURCE_TYPES = [
   { value: 'labor',    label: 'मज़दूरी'  },
