@@ -5,14 +5,14 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Plus } from 'lucide-react';
 import api from '../services/api';
 import { ProfitDisplay } from '../utils/money';
 import { SEASONS, SEASON_DETAIL_CROPS as S, GENERAL } from '../strings/hi';
 
 export default function SeasonDetailPage() {
   const { season, crop_year } = useParams();
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
   const [data, setData]     = useState(null);
   const [status, setStatus] = useState('loading');
 
@@ -75,7 +75,17 @@ export default function SeasonDetailPage() {
         {S.back}
       </button>
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">{seasonLabel}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">{seasonLabel}</h1>
+        <button
+          onClick={() => navigate(`/season/${season}/${crop_year}/new-cycle`)}
+          className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600
+                     text-white text-sm font-semibold rounded-xl px-3 py-2 transition"
+        >
+          <Plus className="w-4 h-4" />
+          {S.addCycle}
+        </button>
+      </div>
 
       {/* Crop rows */}
       <div className="space-y-3">

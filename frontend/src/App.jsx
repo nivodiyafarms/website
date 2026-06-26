@@ -13,6 +13,7 @@ import NewYieldPage from './pages/NewYieldPage';
 import FieldsPage from './pages/FieldsPage';
 import FieldDetailPage from './pages/FieldDetailPage';
 import NewPrepWOPage from './pages/NewPrepWOPage';
+import NewCyclePage from './pages/NewCyclePage';
 import WorkersPage from './pages/WorkersPage';
 import NewWorkerPage from './pages/NewWorkerPage';
 import ComingSoon from './pages/ComingSoon';
@@ -39,6 +40,7 @@ function App() {
           {/* ── Primary nav destinations ───────────────────────────────── */}
           <Route path="/seasons"                                            element={<Shell><SeasonsPage /></Shell>} />
           <Route path="/season/:season/:crop_year"                          element={<Shell><SeasonDetailPage /></Shell>} />
+          <Route path="/season/:season/:crop_year/new-cycle"                element={<Shell><NewCyclePage /></Shell>} />
           <Route path="/season/:season/:crop_year/crop/:crop_name"          element={<Shell><CropVarietyPage /></Shell>} />
           <Route path="/cycle/:crop_cycle_id"                               element={<Shell><CycleDetailPage /></Shell>} />
           <Route path="/cycle/:crop_cycle_id/sales/new"                    element={<Shell><NewSalePage /></Shell>} />

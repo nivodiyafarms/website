@@ -93,6 +93,9 @@ const _cropCycleAPI = {
   createCycle: (data) =>
     api.post("/crop-cycles/", data),
 
+  getCropNames: () =>
+    api.get("/crop-cycles/crop-names"),
+
   updateCycle: (id, data) =>
     api.put(`/crop-cycles/${id}`, data),
 

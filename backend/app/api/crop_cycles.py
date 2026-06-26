@@ -6,6 +6,7 @@ from typing import List
 from uuid import UUID
 from app.database import get_db
 from app.models.crop_cycle import CropCycle, CropCycleStatus
+from app.models.crop_cycle_field import CropCycleField
 from app.models.task import Task
 from app.models.user import User
 from app.schemas.crop_cycle import CropCycleCreate, CropCycleUpdate, CropCycleResponse
@@ -17,6 +18,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, and_
 
 router = APIRouter(prefix="/api/crop-cycles", tags=["crop-cycles"])
+
+
+@router.get("/crop-names")
+def list_crop_names(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Return distinct crop names for autocomplete suggestions."""
+    from sqlalchemy import select, distinct
+    names = db.execute(
+        select(distinct(CropCycle.crop_name)).where(CropCycle.crop_name.isnot(None))
+    ).scalars().all()
+    return sorted(names)
 
 
 @router.get("/", response_model=List[CropCycleResponse])
@@ -78,20 +89,41 @@ def create_crop_cycle(
     current_user: User = Depends(get_current_user)
 ):
     data = crop_cycle.model_dump(exclude_unset=True)
-    
+
+    # Extract junction rows; don't pass to CropCycle constructor
+    fields_in = data.pop("fields", None) or []
+
+    # Derive field_code from first junction field (backwards compat with NOT NULL column)
+    if not data.get("field_code") and fields_in:
+        data["field_code"] = fields_in[0]["field_id"]
+
+    # Auto-set cultivated_area = sum of allocated_acres if not explicitly provided
+    if fields_in and not data.get("cultivated_area"):
+        total = sum((f.get("allocated_acres") or 0) for f in fields_in)
+        if total > 0:
+            data["cultivated_area"] = total
+
     # created_by ALWAYS comes from auth, never frontend
     data["created_by"] = current_user.user_id
-    
-    # Auto-generate incident_no if not provided
+
     if not data.get("incident_no"):
         data["incident_no"] = generate_incident_id(db)
-    
-    # Let SQLAlchemy handle id generation (remove crop_cycle_id assignment)
+
     data["created_at"] = datetime.utcnow()
     data["updated_at"] = datetime.utcnow()
-    
+
     db_crop_cycle = CropCycle(**data)
     db.add(db_crop_cycle)
+    db.flush()  # get crop_cycle_id before creating junction rows
+
+    # Create junction rows for each field
+    for f in fields_in:
+        db.add(CropCycleField(
+            crop_cycle_id=db_crop_cycle.crop_cycle_id,
+            field_id=f["field_id"],
+            allocated_acres=f.get("allocated_acres"),
+        ))
+
     db.commit()
     db.refresh(db_crop_cycle)
     return db_crop_cycle

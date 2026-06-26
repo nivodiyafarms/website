@@ -107,6 +107,7 @@ export const SEASON_DETAIL_CROPS = {
   prepTotal:       'कुल खर्चा',
   prepAllocated:   'फसलों में डाला',
   prepUnallocated: 'बिना फसल के',
+  addCycle:        '+ नई फसल',
 };
 
 // ── Variety list (crop has >1 cycle) ──────────────────────────────────────────
@@ -299,6 +300,32 @@ export const FIELD_DETAIL_PREP = {
   deleteConfirm:  'यह काम हटाना है?',
   deleteYes:      'हाँ, हटाओ',
   deleteNo:       'रहने दो',
+};
+
+// ── New cycle form ────────────────────────────────────────────────────────────
+export const NEW_CYCLE = {
+  title:              'नई फसल',
+  seasonLocked:       'सीज़न (तय)',
+  cropLabel:          'फसल',
+  cropPlaceholder:    'जैसे: सोयाबीन, गेहूं, मूंग',
+  cropSuggestions:    'पिछली फसलें',
+  varietyLabel:       'किस्म / बीज',
+  varietyPlaceholder: 'जैसे: JS 335, NI 8 — English में लिखें',
+  varietyNote:        'किस्म का नाम कभी नहीं बदला जाता',
+  sowingLabel:        'बुआई की तारीख',
+  seedQtyLabel:       'बीज मात्रा (kg) — वैकल्पिक',
+  seedQtyPlaceholder: 'जैसे: 40',
+  fieldsLabel:        'खेत + रक़बा (कम से कम एक)',
+  fieldAcresPlaceholder: 'एकड़',
+  totalAcres:         (n) => `कुल: ${n} एकड़`,
+  submit:             'फसल दर्ज करो',
+  saving:             'दर्ज हो रहा है…',
+  errors: {
+    crop:    'फसल का नाम भरो',
+    sowing:  'बुआई की तारीख चुनो',
+    noField: 'कम से कम एक खेत चुनो',
+    acres:   'रक़बा 0 से ज़्यादा होना चाहिए',
+  },
 };
 
 // ── New sale form ─────────────────────────────────────────────────────────────
