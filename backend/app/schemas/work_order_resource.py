@@ -12,8 +12,8 @@ from datetime import datetime
 class WorkOrderResourceCreate(BaseModel):
     resource_type: str          # enum from DB (LABOR, FUEL, etc.)
     name: str                   # display name
-    qty: float
-    unit: str
+    qty: Optional[float] = None
+    unit: Optional[str] = None
     rate: Optional[float] = None
     cost: Optional[float] = None  # Optional - computed server-side when rate exists
 
@@ -45,10 +45,10 @@ class WorkOrderResourceResponse(BaseModel):
 
     resource_type: str
     name: str
-    qty: float
-    unit: str
+    qty: Optional[float]
+    unit: Optional[str]
     rate: Optional[float]
-    cost: float
+    cost: Optional[float]
 
     created_at: datetime
 

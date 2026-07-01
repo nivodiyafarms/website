@@ -47,7 +47,8 @@ def create_task(
         subcategory=payload.subcategory,
         short_description=payload.short_description,
         description=payload.description,
-        assigned_to_id=payload.assigned_to_id,
+        assigned_to_id=payload.assigned_to_id or current_user.user_id,
+        field_id=payload.field_id,
         created_by_id=current_user.user_id,  # Always from auth, never from frontend
         severity=payload.severity,
         status=TaskStatus.NEW,

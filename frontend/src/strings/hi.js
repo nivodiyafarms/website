@@ -137,6 +137,8 @@ export const CYCLE_DETAIL_STRINGS = {
   yieldsHeading: 'पैदावार',
   noSales:       'अभी कोई बिक्री नहीं',
   noYields:      'अभी कोई पैदावार दर्ज नहीं',
+  tasksHeading:  'काम',
+  noTasks:       'अभी कोई काम नहीं',
   acres:         (n) => `${n} एकड़`,
 };
 
@@ -260,6 +262,208 @@ export const NEW_WORKER = {
   },
 };
 
+// ── Task status labels (raw token → Hindi; NEVER show raw tokens to users) ────
+export const TASK_STATUSES = {
+  new:         'नया',
+  in_progress: 'चल रहा है',
+  on_hold:     'रोक पर',
+  resolved:    'पूरा हुआ',
+  reopened:    'फिर खुला',
+  closed:      'बंद',
+  cancelled:   'रद्द',
+};
+
+export const TASK_STATUS_COLORS = {
+  new:         'bg-blue-100 text-blue-800',
+  in_progress: 'bg-yellow-100 text-yellow-800',
+  on_hold:     'bg-orange-100 text-orange-800',
+  resolved:    'bg-green-100 text-green-800',
+  reopened:    'bg-purple-100 text-purple-800',
+  closed:      'bg-gray-100 text-gray-700',
+  cancelled:   'bg-red-100 text-red-800',
+};
+
+// Resource type labels (task detail + WO resources)
+export const RESOURCE_TYPES = {
+  labor:        'मज़दूरी',
+  fuel:         'डीज़ल',
+  material:     'सामान',
+  machine:      'ट्रैक्टर',
+  water:        'पानी',
+  service:      'सेवा',
+  contract:     'ठेका',
+  other:        'अन्य',
+  construction: 'निर्माण',
+};
+
+// ── Task category labels (backend enum value → Hindi display) ─────────────────
+export const TASK_CATEGORY_LABELS = {
+  sowing:     'बुआई',
+  irrigation: 'सिंचाई',
+  fertilizer: 'खाद',
+  harvest:    'कटाई',
+  fuel:       'ईंधन',
+  sale:       'बिक्री',
+  storage:    'भंडार',
+};
+
+// Subcategory options per category — value must match TaskSubcategory backend enum
+export const TASK_SUBCATEGORIES = {
+  sowing: [
+    { value: 'khurar',    label: 'खरार'     },
+    { value: 'rotavator', label: 'रोटावेटर' },
+    { value: 'mulching',  label: 'मल्चर'    },
+    { value: 'seeding',   label: 'बोइनी'    },
+    { value: 'ploughing', label: 'प्लाउ'    },
+    { value: 'leveling',  label: 'लेवलिंग'  },
+    { value: 'other',     label: 'अन्य'      },
+  ],
+  irrigation: [
+    { value: 'paleva',              label: 'पलेवा (बीज बोने से पहले)' },
+    { value: 'first_irrigation',    label: 'पहली पानी'    },
+    { value: 'second_irrigation',   label: 'दूसरी पानी'   },
+    { value: 'third_irrigation',    label: 'तीसरी पानी'   },
+    { value: 'fourth_irrigation',   label: 'चौथी पानी'    },
+    { value: 'fifth_irrigation',    label: 'पाँचवीं पानी' },
+    { value: 'contract_irrigation', label: 'ठेका सिंचाई'  },
+    { value: 'other',               label: 'अन्य'           },
+  ],
+  fertilizer: [
+    { value: 'seed_treatment',  label: 'बीज उपचार'  },
+    { value: 'dap',             label: 'डीएपी'        },
+    { value: 'urea',            label: 'यूरिया'       },
+    { value: 'pesticide',       label: 'दवाई'         },
+    { value: 'potash',          label: 'पोटाश'        },
+    { value: 'zinc',            label: 'जिंक'          },
+    { value: 'sulfur',          label: 'सल्फर'        },
+    { value: 'super_phosphate', label: 'सुपर'          },
+    { value: 'other',           label: 'अन्य'          },
+  ],
+  harvest: [
+    { value: 'manual_cutting',   label: 'कटाई'           },
+    { value: 'thresher',         label: 'थ्रेसर'         },
+    { value: 'harvester',        label: 'हार्वेस्टर'     },
+    { value: 'winnowing',        label: 'पंखा'           },
+    { value: 'contract_harvest', label: 'ठेका कटाई'      },
+    { value: 'other',            label: 'अन्य'           },
+  ],
+  fuel: [
+    { value: 'diesel', label: 'डीज़ल'    },
+    { value: 'petrol', label: 'पेट्रोल'  },
+    { value: 'other',  label: 'अन्य'     },
+  ],
+  sale: [
+    { value: 'mandi_sale',   label: 'मंडी बिक्री'    },
+    { value: 'society_sale', label: 'सोसाइटी बिक्री' },
+    { value: 'other',        label: 'अन्य'            },
+  ],
+  storage: [
+    { value: 'farm_id',   label: 'खेत क्रमांक'           },
+    { value: 'warehouse', label: 'वेयरहाउस'            },
+    { value: 'other',     label: 'अन्य (इनपुट परीक्षण)' },
+  ],
+};
+
+// ── Severity badges (derived from live task cost — NEVER from stored column) ──
+// Thresholds match backend/app/utils/severity.py — keep in sync.
+export const SEVERITY_BADGES = {
+  sev1: { label: 'भारी',    cls: 'bg-red-100 text-red-700 border border-red-200'         }, // >₹15k
+  sev2: { label: 'अधिक',   cls: 'bg-orange-100 text-orange-700 border border-orange-200' }, // ₹10–15k
+  sev3: { label: 'मध्यम',  cls: 'bg-yellow-100 text-yellow-700 border border-yellow-200' }, // ₹5–10k
+  sev4: { label: 'सामान्य', cls: 'bg-green-100 text-green-700 border border-green-200'   }, // <₹5k
+};
+
+// ── Crop task + WO CRUD strings (CycleDetailPage) ────────────────────────────
+export const TASKS_CRUD = {
+  // Task form
+  addTask:           '+ काम जोड़ो',
+  editTask:          'बदलो',
+  deleteTask:        'हटाओ',
+  deleteTaskConfirm: 'यह काम हटाना है? (पहले वर्क ऑर्डर हटाने होंगे)',
+  deleteTaskYes:     'हाँ, हटाओ',
+  deleteNo:          'रहने दो',
+  tipanniLabel:      'काम का नाम (टिप्पणी)',
+  tipanniPlaceholder:'जैसे: बीज बुवाई, DAP खाद, सिंचाई',
+  varnanLabel:       'विवरण (वैकल्पिक)',
+  varnanPlaceholder: 'ज़्यादा जानकारी…',
+  fieldLabel:        'खेत',
+  fieldNone:         'कोई खेत नहीं',
+  categoryLabel:     'श्रेणी',
+  categoryPlaceholder: 'चुनें',
+  subcategoryLabel:  'उप-श्रेणी',
+  subcategoryPlaceholder: 'चुनें',
+  saveTask:          'काम दर्ज करो',
+  updateTask:        'बदलाव सहेजो',
+  savingTask:        'दर्ज हो रहा है…',
+  cancelForm:        'रद्द',
+  errors: {
+    tipanni:  'काम का नाम भरो',
+    field:    'खेत चुनो',
+    category: 'श्रेणी चुनो',
+  },
+
+  // Task status inline change
+  changeStatus:   'स्थिति',
+  statusSaving:   'बदल रहा है…',
+  statusCancel:   'रद्द',
+
+  // WO form
+  addWO:             '+ वर्क ऑर्डर जोड़ो',
+  editWO:            'बदलो',
+  deleteWO:          'हटाओ',
+  deleteWOConfirm:   'यह वर्क ऑर्डर हटाना है?',
+  deleteWOYes:       'हाँ, हटाओ',
+  saveWO:            'वर्क ऑर्डर दर्ज करो',
+  updateWO:          'बदलाव सहेजो',
+  savingWO:          'दर्ज हो रहा है…',
+  woTipanniLabel:    'वर्क ऑर्डर का नाम',
+  woTipanniPlaceholder: 'जैसे: ट्रैक्टर बुवाई, DAP 2 बोरी डाली',
+  woErrors: {
+    tipanni:    'वर्क ऑर्डर का नाम भरो',
+    simpleCost: 'राशि 0 से ज़्यादा होनी चाहिए',
+    resource:   'कम से कम एक लागत लाइन चाहिए',
+    resCost:    'राशि 0 से ज़्यादा होनी चाहिए',
+    resName:    'विवरण भरो',
+  },
+
+  // Simple / detail cost toggle
+  simpleCostLabel:  'कुल लागत (₹)',
+  simpleCostHint:   '₹ राशि',
+  expandDetail:     'विस्तार ▾',
+  collapseDetail:   'सरल ▴',
+  resourcesLabel:   'लागत का ब्यौरा',
+  addResource:      '+ लागत जोड़ो',
+  resourceName:     'जैसे: 2 मज़दूर, DAP 50kg, डीज़ल 10L',
+  resourceCost:     'राशि (₹)',
+  liveTotal:        'कुल लागत',
+
+  deleteRes:        'हटाओ',
+  deleteResConfirm: 'यह लागत हटानी है?',
+  deleteResYes:     'हाँ, हटाओ',
+
+  // WO lifecycle actions
+  closeWO:              'बंद करो',
+  closingWO:            'बंद हो रहा है…',
+  reopenWO:             'वापस भेजो',
+  reopeningWO:          'वापस हो रहा है…',
+  reopenClosed:         'फिर से खोलो',
+  reopeningClosed:      'खुल रहा है…',
+  // Send-back reason form (pending_review → open)
+  sendBackReasonLabel:  'वापस क्यों भेज रहे हैं?',
+  sendBackReasonPlaceholder: 'कारण लिखो — जैसे: फोटो नहीं मिली, मात्रा गलत है…',
+  sendBackReasonHint:   'वैकल्पिक — लेकिन लिखना बेहतर ताकि कर्मचारी जाने',
+  sendBackSubmit:       'वापस भेजो',
+  // Worker completion flow
+  submitCompletion:     'काम पूरा हुआ',
+  completionLabel:      'क्या काम हुआ?',
+  completionPlaceholder:'काम का विवरण — किसने किया, क्या किया…',
+  completionRequired:   'काम का विवरण ज़रूर लिखो',
+  submitCompletionBtn:  'सबमिट करो',
+  submittingCompletion: 'सबमिट हो रहा है…',
+  completionNoteLabel:  'कर्मचारी ने लिखा:',
+  sendBackNoteLabel:    'वापस क्यों भेजा:',
+};
+
 // ── Prep-WO form ──────────────────────────────────────────────────────────────
 export const PREP_RESOURCE_TYPES = [
   { value: 'labor',    label: 'मज़दूरी'  },
@@ -309,6 +513,8 @@ export const NEW_CYCLE = {
   cropLabel:          'फसल',
   cropPlaceholder:    'जैसे: सोयाबीन, गेहूं, मूंग',
   cropSuggestions:    'पिछली फसलें',
+  addNewCrop:         '+ नई फसल जोड़ो',
+  newCropPlaceholder: 'फसल का नाम लिखो (जैसे: सोयाबीन)',
   varietyLabel:       'किस्म / बीज',
   varietyPlaceholder: 'जैसे: JS 335, NI 8 — English में लिखें',
   varietyNote:        'किस्म का नाम कभी नहीं बदला जाता',

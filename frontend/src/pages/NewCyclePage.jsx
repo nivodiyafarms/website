@@ -20,6 +20,7 @@ export default function NewCyclePage() {
 
   // Form state
   const [crop, setCrop]             = useState('');
+  const [newCropMode, setNewCropMode] = useState(false); // true when "नई फसल जोड़ो" chosen
   const [variety, setVariety]       = useState('');
   const [sowingDate, setSowingDate] = useState('');
   const [seedQty, setSeedQty]       = useState('');
@@ -130,35 +131,48 @@ export default function NewCyclePage() {
           <label className="block text-sm font-semibold text-gray-700 mb-1">
             {S.cropLabel} <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
-            value={crop}
-            onChange={e => setCrop(e.target.value)}
-            placeholder={S.cropPlaceholder}
-            className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
-                       focus:outline-none focus:ring-2 focus:ring-orange-400"
-            lang="hi"
-          />
-          {/* Suggestions */}
-          {cropNames.length > 0 && (
-            <div className="mt-2">
-              <p className="text-xs text-gray-400 mb-1.5">{S.cropSuggestions}:</p>
-              <div className="flex flex-wrap gap-1.5">
-                {cropNames.map(n => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setCrop(n)}
-                    className={`px-2.5 py-1 rounded-lg text-xs border transition
-                      ${crop === n
-                        ? 'bg-orange-500 text-white border-orange-500'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-orange-300'
-                      }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
+          {cropNames.length > 0 && !newCropMode ? (
+            <select
+              value={crop}
+              onChange={e => {
+                if (e.target.value === '__new__') {
+                  setNewCropMode(true);
+                  setCrop('');
+                } else {
+                  setCrop(e.target.value);
+                }
+              }}
+              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
+                         focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
+            >
+              <option value="">— फसल चुनो —</option>
+              {cropNames.map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+              <option value="__new__">{S.addNewCrop}</option>
+            </select>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={crop}
+                onChange={e => setCrop(e.target.value)}
+                placeholder={S.newCropPlaceholder}
+                className="flex-1 border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
+                           focus:outline-none focus:ring-2 focus:ring-orange-400"
+                lang="hi"
+                autoFocus={newCropMode}
+              />
+              {newCropMode && (
+                <button
+                  type="button"
+                  onClick={() => { setNewCropMode(false); setCrop(''); }}
+                  className="px-3 rounded-xl border border-gray-300 text-gray-500
+                             hover:bg-gray-50 text-sm"
+                >
+                  ← वापस
+                </button>
+              )}
             </div>
           )}
         </div>

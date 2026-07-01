@@ -106,6 +106,9 @@ const _cropCycleAPI = {
   getTasks: (cycleId) =>
     api.get(`/crop-cycles/${cycleId}/tasks`),
 
+  getTasksDetail: (cycleId) =>
+    api.get(`/crop-cycles/${cycleId}/tasks-detail`),
+
   createTask: (cycleId, data) =>
     api.post(`/crop-cycles/${cycleId}/tasks`, data),
 
@@ -124,6 +127,9 @@ const _cropCycleAPI = {
 
   updateWorkOrder: (taskId, workOrderId, data) =>
     api.patch(`/tasks/${taskId}/work-orders/${workOrderId}`, data),
+
+  deleteWorkOrder: (taskId, workOrderId) =>
+    api.delete(`/tasks/${taskId}/work-orders/${workOrderId}`),
 
   // Work Order Resources
   getWorkOrderResources: (workOrderId) =>
@@ -155,7 +161,7 @@ export const woActionsAPI = {
   assign:            (woId, workerId) => api.patch(`/work-orders/${woId}/assign`, { worker_id: workerId }),
   submitCompletion:  (woId, notes)    => api.patch(`/work-orders/${woId}/submit-completion`, { notes: notes ?? null }),
   close:             (woId)           => api.patch(`/work-orders/${woId}/close`),
-  reopen:            (woId)           => api.patch(`/work-orders/${woId}/reopen`),
+  reopen:            (woId, data = {}) => api.patch(`/work-orders/${woId}/reopen`, data),
 };
 
 /* ======================

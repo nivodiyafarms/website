@@ -14,13 +14,14 @@ from app.models.task import (
 
 
 class TaskCreate(BaseModel):
-    category: Optional[TaskCategory]
-    subcategory: Optional[TaskSubcategory]
+    category: Optional[TaskCategory] = None
+    subcategory: Optional[TaskSubcategory] = None
 
     short_description: str
     description: Optional[str] = None
 
-    assigned_to_id: UUID
+    assigned_to_id: Optional[UUID] = None  # defaults to current_user server-side
+    field_id: Optional[str] = None  # field within this cycle (task.field_id)
     severity: Optional[SeverityLevel] = None
 
     model_config = {"from_attributes": True}
@@ -30,13 +31,14 @@ class TaskUpdate(BaseModel):
     # Classification
     category: Optional[TaskCategory] = None
     subcategory: Optional[TaskSubcategory] = None
-    
+
     # Description fields
     short_description: Optional[str] = None
     description: Optional[str] = None
-    
+
     # Assignment
     assigned_to_id: Optional[UUID] = None
+    field_id: Optional[str] = None  # field tag
     
     # Status and workflow
     status: Optional[TaskStatus] = None
@@ -64,6 +66,7 @@ class TaskResponse(BaseModel):
 
     short_description: str
     description: Optional[str]
+    field_id: Optional[str] = None
 
     assigned_to_id: UUID
     created_by_id: UUID

@@ -55,6 +55,96 @@ def get_crop_cycles(db: Session = Depends(get_db), current_user: User = Depends(
         raise HTTPException(status_code=500, detail=f"Error fetching crop cycles: {str(e)}")
 
 
+@router.get("/{crop_cycle_id}/tasks-detail")
+def get_tasks_with_detail(
+    crop_cycle_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Tasks + WOs + resources for a cycle, with costs derived live from work_order_resources."""
+    from app.models.work_order import WorkOrder
+    from app.models.note import Note
+    from app.utils.severity import cost_severity
+
+    tasks = (
+        db.query(Task)
+        .filter(Task.crop_cycle_id == crop_cycle_id)
+        .order_by(Task.created_at)
+        .all()
+    )
+
+    result = []
+    for task in tasks:
+        work_orders = (
+            db.query(WorkOrder)
+            .filter(WorkOrder.task_id == task.task_id)
+            .order_by(WorkOrder.created_at)
+            .all()
+        )
+
+        # Batch-load notes for all WOs in this task
+        wo_ids = [wo.work_order_id for wo in work_orders]
+        notes_by_wo: dict[str, list[str]] = {}
+        if wo_ids:
+            wo_notes = (
+                db.query(Note)
+                .filter(Note.related_type == 'work_order', Note.related_id.in_(wo_ids))
+                .order_by(Note.created_at.asc())
+                .all()
+            )
+            for n in wo_notes:
+                key = str(n.related_id)
+                notes_by_wo.setdefault(key, []).append(n.text or '')
+
+        task_cost = 0.0
+        wo_list = []
+        for wo in work_orders:
+            wo_cost = float(sum((r.cost or 0) for r in wo.resources))
+            task_cost += wo_cost
+            worker_name = wo.assigned_worker.name if wo.assigned_worker else None
+            # Latest completion note (last item in list = most recent, since ordered asc)
+            wo_note_texts = notes_by_wo.get(str(wo.work_order_id), [])
+            completion_note = wo_note_texts[-1] if wo_note_texts else None
+            wo_list.append({
+                "work_order_id":     str(wo.work_order_id),
+                "work_order_number": wo.work_order_number,
+                "short_description": wo.short_description,   # fix: was missing (edit opened blank)
+                "description":       wo.description,          # fix: was missing
+                "status":            wo.status.value if wo.status else None,
+                "assigned_worker":   worker_name,
+                "wo_cost":           wo_cost,
+                "completion_note":   completion_note,         # latest note on this WO
+                "resources": [
+                    {
+                        "resource_id":   str(r.work_order_resources_id),
+                        "name":          r.name,
+                        "resource_type": r.resource_type.value if r.resource_type else None,
+                        "qty":           float(r.qty) if r.qty is not None else None,
+                        "unit":          r.unit,
+                        "rate":          float(r.rate) if r.rate is not None else None,
+                        "cost":          float(r.cost) if r.cost is not None else None,
+                    }
+                    for r in wo.resources
+                ],
+            })
+
+        result.append({
+            "task_id":           str(task.task_id),
+            "task_number":       task.task_number,
+            "short_description": task.short_description,
+            "description":       task.description,
+            "field_id":          task.field_id,              # fix: was missing (edit lost field)
+            "category":          task.category.value if task.category else None,
+            "subcategory":       task.subcategory.value if task.subcategory else None,
+            "status":            task.status.value if task.status else None,
+            "task_cost":         task_cost,
+            "severity":          cost_severity(task_cost),   # derived, never stored
+            "work_orders":       wo_list,
+        })
+
+    return result
+
+
 @router.get("/{crop_cycle_id}/expenditure")
 def get_crop_cycle_expenditure(
     crop_cycle_id: UUID,

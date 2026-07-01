@@ -1,26 +1,32 @@
 /**
  * CycleDetailPage — /cycle/:crop_cycle_id
- * THE money screen. Hero P&L panel + fields/sales/yields sections.
+ * THE money screen. Hero P&L + tasks (2a display + 2b CRUD) + fields/sales/yields.
  *
- * Fetches:
- *   GET /api/crop-cycles/{id}/pnl      — P&L numbers
- *   GET /api/crop-cycles/{id}          — field_code + cultivated_area
- *
- * location.state (set by SeasonDetailPage / CropVarietyPage):
- *   { season, crop_year, crop_name, seed_category }
- *   Falls back gracefully if navigated directly (bookmarked URL).
+ * Fetches on mount + after every mutation:
+ *   GET /api/crop-cycles/{id}/pnl
+ *   GET /api/crop-cycles/{id}
+ *   GET /api/sales?crop_cycle_id={id}
+ *   GET /api/yields?crop_cycle_id={id}
+ *   GET /api/crop-cycles/{id}/tasks-detail
  *
  * TODO(auth-slice-6): gate this screen to supervisor/owner role — financial data.
- * TODO(3c): render sales + yield line items once list endpoints exist.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Plus } from 'lucide-react';
-import api from '../services/api';
+import { ArrowLeft, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import api, { cropCycleAPI, woActionsAPI } from '../services/api';
 import { ProfitDisplay, formatMoney } from '../utils/money';
-import { SEASONS, CYCLE_DETAIL_STRINGS as S, SALE_CHANNELS, YIELD_LIST as YS, QUALITY_GRADES } from '../strings/hi';
+import {
+  SEASONS, CYCLE_DETAIL_STRINGS as S, SALE_CHANNELS, YIELD_LIST as YS,
+  QUALITY_GRADES, TASK_STATUSES, TASK_STATUS_COLORS, WO_STATUSES, WO_STATUS_COLORS,
+  RESOURCE_TYPES, PREP_RESOURCE_TYPES, TASKS_CRUD as TC,
+  TASK_CATEGORY_LABELS, TASK_SUBCATEGORIES, SEVERITY_BADGES,
+} from '../strings/hi';
 
-// ── Breakdown row (cost/revenue lines — no arrow, just color) ─────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function emptyResLine() { return { name: '', resource_type: 'labor', cost: '' }; }
+
+// ── Simple breakdown row ────────────────────────────────────────────────────────
 function MoneyLine({ label, amount, className = '' }) {
   const { formatted } = formatMoney(amount);
   return (
@@ -45,6 +51,438 @@ function Section({ title, children }) {
   );
 }
 
+// ── TaskForm — create or edit a task ──────────────────────────────────────────
+function TaskForm({ cycleId, cycleFields = [], initial = null, onSave, onCancel }) {
+  const isEdit = Boolean(initial);
+
+  const [tipanni,     setTipanni]     = useState(initial?.short_description ?? '');
+  const [varnan,      setVarnan]      = useState(initial?.description ?? '');
+  const [fieldId,     setFieldId]     = useState(
+    initial?.field_id ?? (cycleFields[0]?.field_id ?? '')
+  );
+  const [category,    setCategory]    = useState(initial?.category ?? '');
+  const [subcategory, setSubcategory] = useState(initial?.subcategory ?? '');
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState('');
+
+  const subcatOptions = TASK_SUBCATEGORIES[category] ?? [];
+
+  function handleCategoryChange(val) {
+    setCategory(val);
+    setSubcategory('');  // reset subcategory when category changes
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!tipanni.trim())  { setError(TC.errors.tipanni);  return; }
+    if (!fieldId)         { setError(TC.errors.field);    return; }
+    if (!category)        { setError(TC.errors.category); return; }
+    setSaving(true); setError('');
+    try {
+      const payload = {
+        short_description: tipanni.trim(),
+        description:       varnan.trim() || null,
+        field_id:          fieldId,
+        category,
+        subcategory:       subcategory || null,
+      };
+      if (isEdit) {
+        await cropCycleAPI.updateTask(cycleId, initial.task_id, payload);
+      } else {
+        await cropCycleAPI.createTask(cycleId, payload);
+      }
+      onSave();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'कुछ गड़बड़ हो गई।');
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}
+          className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-4 space-y-3">
+      {/* tipanni */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 mb-1">
+          {TC.tipanniLabel} <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          value={tipanni}
+          onChange={e => setTipanni(e.target.value)}
+          placeholder={TC.tipanniPlaceholder}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                     focus:outline-none focus:ring-2 focus:ring-orange-400"
+          lang="hi"
+          autoFocus
+        />
+      </div>
+
+      {/* category + subcategory — two column row */}
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className="block text-xs font-semibold text-gray-600 mb-1">
+            {TC.categoryLabel} <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={category}
+            onChange={e => handleCategoryChange(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm
+                       focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
+          >
+            <option value="">{TC.categoryPlaceholder}</option>
+            {Object.entries(TASK_CATEGORY_LABELS).map(([val, label]) => (
+              <option key={val} value={val}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex-1">
+          <label className="block text-xs font-semibold text-gray-600 mb-1">
+            {TC.subcategoryLabel}
+          </label>
+          <select
+            value={subcategory}
+            onChange={e => setSubcategory(e.target.value)}
+            disabled={!category || subcatOptions.length === 0}
+            className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm
+                       focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white
+                       disabled:bg-gray-50 disabled:text-gray-400"
+          >
+            <option value="">{TC.subcategoryPlaceholder}</option>
+            {subcatOptions.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* varnan */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 mb-1">
+          {TC.varnanLabel}
+        </label>
+        <input
+          type="text"
+          value={varnan}
+          onChange={e => setVarnan(e.target.value)}
+          placeholder={TC.varnanPlaceholder}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                     focus:outline-none focus:ring-2 focus:ring-orange-400"
+          lang="hi"
+        />
+      </div>
+
+      {/* field picker */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 mb-1">
+          {TC.fieldLabel} <span className="text-red-500">*</span>
+        </label>
+        {cycleFields.length === 0 ? (
+          <p className="text-xs text-gray-400">{TC.fieldNone}</p>
+        ) : cycleFields.length === 1 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-mono text-gray-700">{cycleFields[0].field_id}</span>
+            {cycleFields[0].allocated_acres && (
+              <span className="text-xs text-gray-400">{cycleFields[0].allocated_acres} एकड़</span>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {cycleFields.map(f => (
+              <button
+                key={f.field_id} type="button"
+                onClick={() => setFieldId(f.field_id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition
+                  ${fieldId === f.field_id
+                    ? 'bg-orange-500 text-white border-orange-500'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-orange-400'}`}
+              >
+                {f.field_id}
+                {f.allocated_acres ? ` · ${f.allocated_acres} एकड़` : ''}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-600 bg-red-50 rounded px-2 py-1">{error}</p>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          type="submit" disabled={saving}
+          className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-50
+                     text-white text-sm font-semibold rounded-xl py-2 transition"
+        >
+          {saving ? TC.savingTask : (isEdit ? TC.updateTask : TC.saveTask)}
+        </button>
+        <button
+          type="button" onClick={onCancel}
+          className="px-4 text-sm text-gray-500 hover:text-gray-700 border border-gray-300
+                     rounded-xl py-2 bg-white transition"
+        >
+          {TC.cancelForm}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ── WOForm — create (with simpler cost) or edit (description only) ────────────
+function WOForm({ taskId, initial = null, onSave, onCancel }) {
+  const isEdit = Boolean(initial);
+
+  const [tipanni,    setTipanni]    = useState(initial?.short_description ?? '');
+  const [varnan,     setVarnan]     = useState(initial?.description ?? '');
+  // Cost mode: simple = one ₹ total; detail = resource line breakdown
+  const [showDetail, setShowDetail] = useState(false);
+  const [simpleCost, setSimpleCost] = useState('');
+  const [resources,  setResources]  = useState([emptyResLine()]);
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState('');
+
+  const liveTotal = resources.reduce((s, r) => s + (parseFloat(r.cost) || 0), 0);
+  const { formatted: liveTotalFmt } = formatMoney(liveTotal);
+
+  function toggleDetail() {
+    if (!showDetail) {
+      // Entering detail mode: seed the first resource line with the simple cost amount
+      const seed = parseFloat(simpleCost) > 0
+        ? [{ name: 'अन्य खर्च', resource_type: 'other', cost: simpleCost }]
+        : [emptyResLine()];
+      setResources(seed);
+      setShowDetail(true);
+    } else {
+      // Collapsing back to simple: sync simpleCost from current live total
+      if (liveTotal > 0) setSimpleCost(String(liveTotal));
+      setShowDetail(false);
+    }
+  }
+
+  function updateRes(idx, field, val) {
+    setResources(prev => prev.map((r, i) => i === idx ? { ...r, [field]: val } : r));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!tipanni.trim()) { setError(TC.woErrors.tipanni); return; }
+
+    if (!isEdit) {
+      // Build the resource list to POST
+      let resToPost;
+      if (!showDetail) {
+        if (!(parseFloat(simpleCost) > 0)) { setError(TC.woErrors.simpleCost); return; }
+        resToPost = [{ name: 'अन्य खर्च', resource_type: 'other', cost: parseFloat(simpleCost) }];
+      } else {
+        if (resources.length === 0) { setError(TC.woErrors.resource); return; }
+        for (const r of resources) {
+          if (!r.name.trim())            { setError(TC.woErrors.resName); return; }
+          if (!(parseFloat(r.cost) > 0)) { setError(TC.woErrors.resCost); return; }
+        }
+        resToPost = resources.map(r => ({
+          name:          r.name.trim(),
+          resource_type: r.resource_type,
+          cost:          parseFloat(r.cost),
+        }));
+      }
+
+      setSaving(true); setError('');
+      try {
+        const woRes = await cropCycleAPI.createWorkOrder(taskId, {
+          short_description: tipanni.trim(),
+          description:       varnan.trim() || null,
+        });
+        const woId = woRes.data.work_order_id;
+        for (const r of resToPost) {
+          await cropCycleAPI.createWorkOrderResource(woId, r);
+        }
+        onSave();
+      } catch (err) {
+        setError(err.response?.data?.detail || 'कुछ गड़बड़ हो गई।');
+      } finally { setSaving(false); }
+    } else {
+      // Edit: only patch description fields (resources managed inline)
+      setSaving(true); setError('');
+      try {
+        await cropCycleAPI.updateWorkOrder(taskId, initial.work_order_id, {
+          short_description: tipanni.trim(),
+          description:       varnan.trim() || null,
+        });
+        onSave();
+      } catch (err) {
+        setError(err.response?.data?.detail || 'कुछ गड़बड़ हो गई।');
+      } finally { setSaving(false); }
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}
+          className="bg-green-50 border border-green-200 rounded-xl px-4 py-4 space-y-3">
+      {/* tipanni */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 mb-1">
+          {TC.woTipanniLabel} <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          value={tipanni}
+          onChange={e => setTipanni(e.target.value)}
+          placeholder={TC.woTipanniPlaceholder}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                     focus:outline-none focus:ring-2 focus:ring-green-500"
+          lang="hi"
+          autoFocus
+        />
+      </div>
+
+      {/* varnan */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 mb-1">
+          {TC.varnanLabel}
+        </label>
+        <input
+          type="text"
+          value={varnan}
+          onChange={e => setVarnan(e.target.value)}
+          placeholder={TC.varnanPlaceholder}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                     focus:outline-none focus:ring-2 focus:ring-green-500"
+          lang="hi"
+        />
+      </div>
+
+      {/* Cost section — only on create */}
+      {!isEdit && (
+        <div>
+          {/* Row: label + toggle */}
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold text-gray-600">
+              {showDetail ? TC.resourcesLabel : TC.simpleCostLabel}
+              {' '}<span className="text-red-500">*</span>
+            </label>
+            <button
+              type="button"
+              onClick={toggleDetail}
+              className="text-xs text-green-700 font-medium hover:text-green-900 underline"
+            >
+              {showDetail ? TC.collapseDetail : TC.expandDetail}
+            </button>
+          </div>
+
+          {!showDetail ? (
+            /* ── Simple mode: one ₹ input ── */
+            <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+              <span className="text-gray-400 font-medium shrink-0">₹</span>
+              <input
+                type="number" inputMode="decimal" min="0"
+                value={simpleCost}
+                onChange={e => setSimpleCost(e.target.value)}
+                placeholder={TC.simpleCostHint}
+                className="flex-1 text-sm focus:outline-none bg-transparent"
+              />
+            </div>
+          ) : (
+            /* ── Detail mode: resource lines ── */
+            <>
+              <div className="space-y-3">
+                {resources.map((res, idx) => (
+                  <div key={idx}
+                       className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {PREP_RESOURCE_TYPES.map(rt => (
+                        <button
+                          key={rt.value} type="button"
+                          onClick={() => updateRes(idx, 'resource_type', rt.value)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition
+                            ${res.resource_type === rt.value
+                              ? 'bg-green-600 text-white border-green-600'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-green-400'}`}
+                        >
+                          {rt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 items-start">
+                      <div className="flex-1 space-y-1.5">
+                        <input
+                          type="text"
+                          value={res.name}
+                          onChange={e => updateRes(idx, 'name', e.target.value)}
+                          placeholder={TC.resourceName}
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm
+                                     focus:outline-none focus:ring-2 focus:ring-green-400 bg-white"
+                          lang="hi"
+                        />
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-400 text-sm shrink-0">₹</span>
+                          <input
+                            type="number" inputMode="decimal" min="0"
+                            value={res.cost}
+                            onChange={e => updateRes(idx, 'cost', e.target.value)}
+                            placeholder={TC.resourceCost}
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm
+                                       focus:outline-none focus:ring-2 focus:ring-green-400 bg-white"
+                          />
+                        </div>
+                      </div>
+                      {resources.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setResources(prev => prev.filter((_, i) => i !== idx))}
+                          className="mt-0.5 text-gray-300 hover:text-red-400 p-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setResources(prev => [...prev, emptyResLine()])}
+                className="mt-2 text-sm text-green-700 font-medium hover:text-green-800"
+              >
+                {TC.addResource}
+              </button>
+              {liveTotal > 0 && (
+                <div className="flex justify-between items-center mt-3 rounded-xl
+                                bg-green-50 border border-green-100 px-4 py-2.5">
+                  <span className="text-sm font-semibold text-gray-700">{TC.liveTotal}</span>
+                  <span className="text-base font-bold text-green-700 tabular-nums">
+                    {liveTotalFmt}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="text-xs text-red-600 bg-red-50 rounded px-2 py-1">{error}</p>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          type="submit" disabled={saving}
+          className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50
+                     text-white text-sm font-semibold rounded-xl py-2 transition"
+        >
+          {saving ? TC.savingWO : (isEdit ? TC.updateWO : TC.saveWO)}
+        </button>
+        <button
+          type="button" onClick={onCancel}
+          className="px-4 text-sm text-gray-500 hover:text-gray-700 border border-gray-300
+                     rounded-xl py-2 bg-white transition"
+        >
+          {TC.cancelForm}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function CycleDetailPage() {
   const { crop_cycle_id } = useParams();
@@ -52,49 +490,222 @@ export default function CycleDetailPage() {
   const location          = useLocation();
   const ctx               = location.state ?? {};
 
-  const [pnl, setPnl]             = useState(null);
-  const [detail, setDetail]       = useState(null);
-  const [sales, setSales]         = useState([]);
-  const [yields, setYields]       = useState([]);
-  const [status, setStatus]       = useState('loading');
+  // ── Core data ────────────────────────────────────────────────────────────────
+  const [pnl,    setPnl]    = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [sales,  setSales]  = useState([]);
+  const [yields, setYields] = useState([]);
+  const [tasks,  setTasks]  = useState([]);
+  const [status, setStatus] = useState('loading');
 
-  // Sales delete state
-  const [deletingId, setDeletingId]       = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  // ── Expand / collapse ────────────────────────────────────────────────────────
+  const [expandedTasks, setExpandedTasks] = useState(new Set());
+  const [expandedWOs,   setExpandedWOs]   = useState(new Set());
 
-  // Yields delete state
+  const toggleTask = (id) => setExpandedTasks(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const toggleWO = (id) => setExpandedWOs(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  // ── Task CRUD state ──────────────────────────────────────────────────────────
+  const [showAddTask,     setShowAddTask]     = useState(false);
+  const [editingTask,     setEditingTask]     = useState(null); // task obj from tasks-detail
+  const [deletingTaskId,  setDeletingTaskId]  = useState(null);
+  const [taskDelLoading,  setTaskDelLoading]  = useState(false);
+
+  // ── WO CRUD state ────────────────────────────────────────────────────────────
+  const [addingWoTaskId,  setAddingWoTaskId]  = useState(null); // task_id for new WO
+  const [editingWO,       setEditingWO]       = useState(null); // {wo, taskId}
+  const [deletingWOKey,   setDeletingWOKey]   = useState(null); // {woId, taskId}
+  const [woDelLoading,    setWoDelLoading]    = useState(false);
+
+  // ── Resource CRUD state ───────────────────────────────────────────────────────
+  const [addingResWoId,   setAddingResWoId]   = useState(null);
+  const [newResLine,      setNewResLine]      = useState(emptyResLine());
+  const [newResError,     setNewResError]     = useState('');
+  const [newResSaving,    setNewResSaving]    = useState(false);
+  const [deletingRes,     setDeletingRes]     = useState(null); // {woId, resId}
+  const [resDelLoading,   setResDelLoading]   = useState(false);
+
+  // ── Task status inline change ────────────────────────────────────────────────
+  const [statusingTaskId,   setStatusingTaskId]   = useState(null);
+  const [taskStatusLoading, setTaskStatusLoading] = useState(false);
+
+  // ── WO completion submit ─────────────────────────────────────────────────────
+  const [completingWO,      setCompletingWO]      = useState(null); // {woId, taskId}
+  const [completionComment, setCompletionComment] = useState('');
+  const [completionSaving,  setCompletionSaving]  = useState(false);
+
+  // ── WO close / reopen ────────────────────────────────────────────────────────
+  const [closingWoId,    setClosingWoId]    = useState(null);
+  const [closeLoading,   setCloseLoading]   = useState(false);
+  const [reopeningWoId,  setReopeningWoId]  = useState(null);
+  const [reopenLoading,  setReopenLoading]  = useState(false);
+  // Send-back reason (pending_review → open with optional reason note)
+  const [sendBackWoId,   setSendBackWoId]   = useState(null);
+  const [sendBackReason, setSendBackReason] = useState('');
+  const [sendBackLoading, setSendBackLoading] = useState(false);
+
+  // ── Sales delete state ───────────────────────────────────────────────────────
+  const [deletingId,      setDeletingId]      = useState(null);
+  const [deleteLoading,   setDeleteLoading]   = useState(false);
+
+  // ── Yields delete state ───────────────────────────────────────────────────────
   const [deletingYieldId, setDeletingYieldId]         = useState(null);
   const [deleteYieldLoading, setDeleteYieldLoading]   = useState(false);
 
+  // ── Data fetch ───────────────────────────────────────────────────────────────
   const fetchAll = useCallback(() => {
     return Promise.all([
       api.get(`/crop-cycles/${crop_cycle_id}/pnl`),
       api.get(`/crop-cycles/${crop_cycle_id}`),
       api.get(`/sales?crop_cycle_id=${crop_cycle_id}`),
       api.get(`/yields?crop_cycle_id=${crop_cycle_id}`),
-    ])
-      .then(([pnlRes, detailRes, salesRes, yieldsRes]) => {
-        setPnl(pnlRes.data);
-        setDetail(detailRes.data);
-        setSales(salesRes.data ?? []);
-        setYields(yieldsRes.data ?? []);
-        setStatus('ok');
-      })
-      .catch(() => setStatus('error'));
+      cropCycleAPI.getTasksDetail(crop_cycle_id),
+    ]).then(([pnlRes, detailRes, salesRes, yieldsRes, tasksRes]) => {
+      setPnl(pnlRes.data);
+      setDetail(detailRes.data);
+      setSales(salesRes.data ?? []);
+      setYields(yieldsRes.data ?? []);
+      setTasks(tasksRes.data ?? []);
+      setStatus('ok');
+    }).catch(() => setStatus('error'));
   }, [crop_cycle_id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // ── Task handlers ─────────────────────────────────────────────────────────────
+  async function handleDeleteTask(taskId) {
+    setTaskDelLoading(true);
+    try {
+      await cropCycleAPI.deleteTask(crop_cycle_id, taskId);
+      setDeletingTaskId(null);
+      fetchAll();
+    } catch (err) {
+      alert(err.response?.data?.detail?.message || 'हटाने में गड़बड़ हो गई।');
+    } finally { setTaskDelLoading(false); }
+  }
+
+  // ── WO handlers ──────────────────────────────────────────────────────────────
+  async function handleDeleteWO(taskId, woId) {
+    setWoDelLoading(true);
+    try {
+      await cropCycleAPI.deleteWorkOrder(taskId, woId);
+      setDeletingWOKey(null);
+      fetchAll();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'हटाने में गड़बड़ हो गई।');
+    } finally { setWoDelLoading(false); }
+  }
+
+  // ── Resource handlers ─────────────────────────────────────────────────────────
+  async function handleAddResource(woId) {
+    if (!newResLine.name.trim())           { setNewResError(TC.woErrors.resName); return; }
+    if (!(parseFloat(newResLine.cost) > 0)){ setNewResError(TC.woErrors.resCost); return; }
+    setNewResSaving(true); setNewResError('');
+    try {
+      await cropCycleAPI.createWorkOrderResource(woId, {
+        name:          newResLine.name.trim(),
+        resource_type: newResLine.resource_type,
+        cost:          parseFloat(newResLine.cost),
+      });
+      setAddingResWoId(null);
+      setNewResLine(emptyResLine());
+      fetchAll();
+    } catch { setNewResError('कुछ गड़बड़ हो गई।'); }
+    finally { setNewResSaving(false); }
+  }
+
+  async function handleDeleteResource(woId, resId) {
+    setResDelLoading(true);
+    try {
+      await cropCycleAPI.deleteWorkOrderResource(woId, resId);
+      setDeletingRes(null);
+      fetchAll();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'हटाने में गड़बड़ हो गई।');
+    } finally { setResDelLoading(false); }
+  }
+
+  // ── Task status change ────────────────────────────────────────────────────────
+  async function handleTaskStatusChange(taskId, newStatus) {
+    setTaskStatusLoading(true);
+    try {
+      await cropCycleAPI.updateTask(crop_cycle_id, taskId, { status: newStatus });
+      setStatusingTaskId(null);
+      fetchAll();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'स्थिति बदलने में गड़बड़ हो गई।');
+    } finally { setTaskStatusLoading(false); }
+  }
+
+  // ── WO completion submit ──────────────────────────────────────────────────────
+  async function handleSubmitCompletion(woId) {
+    if (!completionComment.trim()) { alert(TC.completionRequired); return; }
+    setCompletionSaving(true);
+    try {
+      await woActionsAPI.submitCompletion(woId, completionComment.trim());
+      setCompletingWO(null);
+      setCompletionComment('');
+      fetchAll();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'सबमिट करने में गड़बड़ हो गई।');
+    } finally { setCompletionSaving(false); }
+  }
+
+  // ── WO close ──────────────────────────────────────────────────────────────────
+  async function handleCloseWO(woId) {
+    setClosingWoId(woId);
+    setCloseLoading(true);
+    try {
+      await woActionsAPI.close(woId);
+      setClosingWoId(null);
+      fetchAll();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'बंद करने में गड़बड़ हो गई।');
+    } finally { setCloseLoading(false); }
+  }
+
+  // ── WO send-back (pending_review → open, with optional reason note) ──────────
+  async function handleSendBack(woId) {
+    setSendBackLoading(true);
+    try {
+      await woActionsAPI.reopen(woId, { reason: sendBackReason.trim() || undefined });
+      setSendBackWoId(null);
+      setSendBackReason('');
+      fetchAll();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'वापस भेजने में गड़बड़ हो गई।');
+    } finally { setSendBackLoading(false); }
+  }
+
+  // ── WO reopen from closed (no reason needed) ──────────────────────────────────
+  async function handleReopenClosed(woId) {
+    setReopeningWoId(woId);
+    setReopenLoading(true);
+    try {
+      await woActionsAPI.reopen(woId, {});
+      setReopeningWoId(null);
+      fetchAll();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'खोलने में गड़बड़ हो गई।');
+    } finally { setReopenLoading(false); }
+  }
+
+  // ── Sale handlers ─────────────────────────────────────────────────────────────
   async function handleDelete(saleId) {
     setDeleteLoading(true);
     try {
       await api.delete(`/sales/${saleId}`);
       setSales(prev => prev.filter(s => s.sale_id !== saleId));
       api.get(`/crop-cycles/${crop_cycle_id}/pnl`).then(r => setPnl(r.data)).catch(() => {});
-    } finally {
-      setDeleteLoading(false);
-      setDeletingId(null);
-    }
+    } finally { setDeleteLoading(false); setDeletingId(null); }
   }
 
   async function handleDeleteYield(yieldId) {
@@ -102,12 +713,10 @@ export default function CycleDetailPage() {
     try {
       await api.delete(`/yields/${yieldId}`);
       setYields(prev => prev.filter(y => y.yield_id !== yieldId));
-    } finally {
-      setDeleteYieldLoading(false);
-      setDeletingYieldId(null);
-    }
+    } finally { setDeleteYieldLoading(false); setDeletingYieldId(null); }
   }
 
+  // ── Guard states ──────────────────────────────────────────────────────────────
   if (status === 'loading') {
     return (
       <div className="max-w-2xl mx-auto px-4 pt-6 space-y-4">
@@ -123,42 +732,40 @@ export default function CycleDetailPage() {
     return (
       <div className="max-w-2xl mx-auto px-4 pt-6 text-center">
         <p className="text-red-600">कुछ गड़बड़ हो गई।</p>
-        <button
-          onClick={() => navigate(-1)}
-          className="mt-4 text-sm text-gray-500 underline"
-        >
+        <button onClick={() => navigate(-1)} className="mt-4 text-sm text-gray-500 underline">
           {S.back}
         </button>
       </div>
     );
   }
 
-  // ── Derived display values ─────────────────────────────────────────────────
-  const season       = pnl.season  ?? ctx.season  ?? '';
-  const crop_year    = ctx.crop_year ?? null;
-  const crop_name    = pnl.crop_name ?? ctx.crop_name ?? '';
-  const seed_cat     = pnl.seed_category ?? ctx.seed_category ?? '';
+  // ── Derived display ───────────────────────────────────────────────────────────
+  const season      = pnl.season      ?? ctx.season      ?? '';
+  const crop_year   = ctx.crop_year   ?? null;
+  const crop_name   = pnl.crop_name   ?? ctx.crop_name   ?? '';
+  const seed_cat    = pnl.seed_category ?? ctx.seed_category ?? '';
 
-  const seasonHindi  = SEASONS[season] ?? season;
-  const seasonLabel  = crop_year ? `${seasonHindi} ${crop_year}` : seasonHindi;
+  const seasonHindi = SEASONS[season] ?? season;
+  const seasonLabel = crop_year ? `${seasonHindi} ${crop_year}` : seasonHindi;
 
-  // Back destination: one level up in the drill-down path
-  const backPath     = crop_year && season
+  const backPath    = crop_year && season
     ? `/season/${season}/${crop_year}`
     : '/seasons';
 
-  const revenue      = pnl.revenue      ?? 0;
-  const cropCost     = pnl.crop_cost    ?? 0;
-  const prepAlloc    = pnl.prep_allocated ?? 0;
-  const profit       = pnl.profit       ?? 0;
+  const revenue   = pnl.revenue        ?? 0;
+  const cropCost  = pnl.crop_cost      ?? 0;
+  const prepAlloc = pnl.prep_allocated ?? 0;
+  const profit    = pnl.profit         ?? 0;
 
-  const { formatted: revFmt }  = formatMoney(revenue);
+  const { formatted: revFmt  } = formatMoney(revenue);
   const { formatted: costFmt } = formatMoney(cropCost);
   const { formatted: prepFmt } = formatMoney(prepAlloc);
 
-  const fieldCode = detail?.field_code;
-  const area      = detail?.cultivated_area;
+  const fieldCode   = detail?.field_code;
+  const area        = detail?.cultivated_area;
+  const cycleFields = detail?.cycle_fields ?? [];
 
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto px-4 pt-5 pb-10 md:pt-8">
 
@@ -174,50 +781,36 @@ export default function CycleDetailPage() {
       {/* Page title */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 leading-tight">{crop_name}</h1>
-        {/* seed_category shown exactly as stored — NEVER translated */}
         {seed_cat && (
           <p className="text-sm text-gray-400 mt-0.5 font-mono">{seed_cat} · {seasonLabel}</p>
         )}
       </div>
 
-      {/* ── HERO P&L PANEL ─────────────────────────────────────────────────── */}
+      {/* ── P&L HERO ─────────────────────────────────────────────────────────── */}
       <div className="rounded-2xl bg-white border border-gray-200 shadow-sm px-6 py-5 mb-6">
-
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">
           {S.pnlTitle}
         </p>
-
-        {/* Big number */}
         <ProfitDisplay amount={profit} large revenue={revenue} cost={cropCost + prepAlloc} />
-
-        {/* Breakdown */}
         <div className="border-t border-gray-100 mt-4 pt-1">
-
-          {/* Revenue */}
           <div className="flex justify-between items-center py-2">
             <span className="text-sm text-gray-600">{S.revenue}</span>
             <span className={`text-sm tabular-nums ${revenue > 0 ? 'text-green-600' : 'text-gray-400'}`}>
               {revFmt}
             </span>
           </div>
-
-          {/* Crop cost */}
           {cropCost > 0 && (
             <div className="flex justify-between items-center py-2">
               <span className="text-sm text-gray-600">{S.cropCost}</span>
               <span className="text-sm tabular-nums text-red-600">{costFmt}</span>
             </div>
           )}
-
-          {/* Prep allocation — only show if >0 */}
           {prepAlloc > 0 && (
             <div className="flex justify-between items-center py-2">
               <span className="text-sm text-gray-600">{S.prepCost}</span>
               <span className="text-sm tabular-nums text-red-600">{prepFmt}</span>
             </div>
           )}
-
-          {/* Divider + profit/loss bottom line */}
           <div className="border-t border-gray-200 mt-1 pt-3 flex justify-between items-center">
             <span className="text-sm font-bold text-gray-900">
               {profit >= 0 ? S.profit : S.loss}
@@ -227,7 +820,7 @@ export default function CycleDetailPage() {
         </div>
       </div>
 
-      {/* ── FIELDS ─────────────────────────────────────────────────────────── */}
+      {/* ── FIELDS ───────────────────────────────────────────────────────────── */}
       <Section title={S.fieldsHeading}>
         {fieldCode ? (
           <div className="flex justify-between items-center py-3">
@@ -241,7 +834,623 @@ export default function CycleDetailPage() {
         )}
       </Section>
 
-      {/* ── SALES ──────────────────────────────────────────────────────────── */}
+      {/* ── TASKS (2a display + 2b CRUD) ─────────────────────────────────────── */}
+      <div className="mb-5">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1">
+          {S.tasksHeading}
+        </h2>
+
+        <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+
+          {tasks.length === 0 && !showAddTask ? (
+            <p className="text-sm text-gray-400 px-4 py-3">{S.noTasks}</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {tasks.map((task) => {
+                const isEditing  = editingTask?.task_id === task.task_id;
+                const isDeleting = deletingTaskId === task.task_id;
+                const tExpanded  = expandedTasks.has(task.task_id);
+                const tStatus    = TASK_STATUSES[task.status]        ?? task.status;
+                const tColor     = TASK_STATUS_COLORS[task.status]   ?? 'bg-gray-100 text-gray-700';
+                const { formatted: tCostFmt } = formatMoney(task.task_cost);
+
+                return (
+                  <div key={task.task_id}>
+
+                    {/* ── Edit form inline ──────────────────────────────────── */}
+                    {isEditing ? (
+                      <div className="px-4 py-3">
+                        <TaskForm
+                          cycleId={crop_cycle_id}
+                          cycleFields={cycleFields}
+                          initial={editingTask}
+                          onSave={() => { setEditingTask(null); fetchAll(); }}
+                          onCancel={() => setEditingTask(null)}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        {/* ── Task row ────────────────────────────────────── */}
+                        <div className="flex items-center px-4 py-3 hover:bg-gray-50">
+                          {/* expand/collapse toggle */}
+                          <button
+                            onClick={() => toggleTask(task.task_id)}
+                            className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                          >
+                            {tExpanded
+                              ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            }
+                            <span className="text-xs font-mono text-gray-400 flex-shrink-0">
+                              {task.task_number}
+                            </span>
+                            <span className="text-sm font-medium text-gray-800 truncate">
+                              {task.short_description}
+                            </span>
+                            {/* status badge — tappable to open inline status picker */}
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setStatusingTaskId(
+                                  statusingTaskId === task.task_id ? null : task.task_id
+                                );
+                              }}
+                              className={`px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0
+                                         border border-transparent hover:border-blue-300 transition ${tColor}`}
+                              title={TC.changeStatus}
+                            >
+                              {tStatus}
+                            </button>
+                            {/* severity badge */}
+                            {task.severity && SEVERITY_BADGES[task.severity] && (
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-semibold flex-shrink-0
+                                               ${SEVERITY_BADGES[task.severity].cls}`}>
+                                {SEVERITY_BADGES[task.severity].label}
+                              </span>
+                            )}
+                          </button>
+                          {/* cost */}
+                          {task.task_cost > 0 && (
+                            <span className="text-sm font-semibold text-red-600 tabular-nums mx-2 flex-shrink-0">
+                              {tCostFmt}
+                            </span>
+                          )}
+                          {/* edit/delete buttons */}
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => { setEditingTask(task); setShowAddTask(false); setStatusingTaskId(null); }}
+                              className="text-xs text-blue-600 hover:text-blue-800 px-1.5 py-0.5
+                                         rounded hover:bg-blue-50 transition-colors"
+                            >
+                              {TC.editTask}
+                            </button>
+                            <button
+                              onClick={() => setDeletingTaskId(task.task_id)}
+                              className="text-xs text-red-500 hover:text-red-700 px-1.5 py-0.5
+                                         rounded hover:bg-red-50 transition-colors"
+                            >
+                              {TC.deleteTask}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* ── Inline status picker ──────────────────────────── */}
+                        {statusingTaskId === task.task_id && (
+                          <div className="flex flex-wrap items-center gap-1.5 bg-blue-50
+                                          border-t border-blue-100 px-4 py-2.5">
+                            <span className="text-xs text-gray-500 font-medium shrink-0 mr-1">
+                              {TC.changeStatus}:
+                            </span>
+                            {Object.entries(TASK_STATUSES).map(([val, label]) => (
+                              <button
+                                key={val}
+                                type="button"
+                                disabled={taskStatusLoading || task.status === val}
+                                onClick={() => handleTaskStatusChange(task.task_id, val)}
+                                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition
+                                  disabled:opacity-60
+                                  ${task.status === val
+                                    ? `${TASK_STATUS_COLORS[val] ?? ''} ring-1 ring-blue-500`
+                                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'}`}
+                              >
+                                {taskStatusLoading && task.status === val ? TC.statusSaving : label}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setStatusingTaskId(null)}
+                              className="text-xs text-gray-400 hover:text-gray-600 ml-1"
+                            >
+                              {TC.statusCancel}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* ── Delete confirm ────────────────────────────────── */}
+                        {isDeleting && (
+                          <div className="flex items-center justify-between bg-red-50
+                                          border-t border-red-100 px-4 py-2.5 gap-3">
+                            <span className="text-sm text-red-700 font-medium">
+                              {TC.deleteTaskConfirm}
+                            </span>
+                            <div className="flex gap-2 flex-shrink-0">
+                              <button
+                                onClick={() => handleDeleteTask(task.task_id)}
+                                disabled={taskDelLoading}
+                                className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700
+                                           px-3 py-1.5 rounded-lg transition disabled:opacity-60"
+                              >
+                                {TC.deleteTaskYes}
+                              </button>
+                              <button
+                                onClick={() => setDeletingTaskId(null)}
+                                disabled={taskDelLoading}
+                                className="text-xs font-semibold text-gray-600 bg-white border
+                                           border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-lg"
+                              >
+                                {TC.deleteNo}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* ── WO list (expanded) ───────────────────────────────── */}
+                    {tExpanded && !isEditing && (
+                      <div className="bg-gray-50 border-t border-gray-100">
+
+                        {task.work_orders.length === 0 && addingWoTaskId !== task.task_id ? (
+                          <p className="text-xs text-gray-400 px-10 py-2">
+                            कोई वर्क ऑर्डर नहीं
+                          </p>
+                        ) : (
+                          task.work_orders.map((wo) => {
+                            const isEditingWO  = editingWO?.wo.work_order_id === wo.work_order_id;
+                            const isDeletingWO = deletingWOKey?.woId === wo.work_order_id;
+                            const wExpanded    = expandedWOs.has(wo.work_order_id);
+                            const wStatus      = WO_STATUSES[wo.status]      ?? wo.status;
+                            const wColor       = WO_STATUS_COLORS[wo.status] ?? 'bg-gray-100 text-gray-700';
+                            const { formatted: wCostFmt } = formatMoney(wo.wo_cost);
+
+                            return (
+                              <div key={wo.work_order_id}
+                                   className="border-b border-gray-100 last:border-b-0">
+
+                                {/* WO edit form */}
+                                {isEditingWO ? (
+                                  <div className="px-10 py-3">
+                                    <WOForm
+                                      taskId={editingWO.taskId}
+                                      initial={wo}
+                                      onSave={() => { setEditingWO(null); fetchAll(); }}
+                                      onCancel={() => setEditingWO(null)}
+                                    />
+                                  </div>
+                                ) : (
+                                  <>
+                                    {/* WO row */}
+                                    <div className="flex items-center pl-10 pr-4 py-2.5 hover:bg-gray-100">
+                                      <button
+                                        onClick={() => toggleWO(wo.work_order_id)}
+                                        className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                                      >
+                                        {wExpanded
+                                          ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                                          : <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                                        }
+                                        <span className="text-xs font-mono text-gray-400 flex-shrink-0">
+                                          {wo.work_order_number}
+                                        </span>
+                                        <span className={`px-1.5 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${wColor}`}>
+                                          {wStatus}
+                                        </span>
+                                        {wo.assigned_worker && (
+                                          <span className="text-xs text-gray-500 truncate">
+                                            → {wo.assigned_worker}
+                                          </span>
+                                        )}
+                                      </button>
+                                      {wo.wo_cost > 0 && (
+                                        <span className="text-xs font-semibold text-red-500 tabular-nums mx-2 flex-shrink-0">
+                                          {wCostFmt}
+                                        </span>
+                                      )}
+                                      {/* Context-aware action buttons */}
+                                      {wo.status === 'pending_review' ? (
+                                        <div className="flex gap-1 flex-shrink-0">
+                                          <button
+                                            onClick={() => handleCloseWO(wo.work_order_id)}
+                                            disabled={closeLoading && closingWoId === wo.work_order_id}
+                                            className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700
+                                                       px-2 py-0.5 rounded-lg transition disabled:opacity-60"
+                                          >
+                                            {closeLoading && closingWoId === wo.work_order_id ? TC.closingWO : TC.closeWO}
+                                          </button>
+                                          <button
+                                            onClick={() => { setSendBackWoId(wo.work_order_id); setSendBackReason(''); }}
+                                            className="text-xs font-semibold text-orange-700 bg-white border border-orange-300
+                                                       hover:bg-orange-50 px-2 py-0.5 rounded-lg transition"
+                                          >
+                                            {TC.reopenWO}
+                                          </button>
+                                        </div>
+                                      ) : wo.status === 'closed' ? (
+                                        <div className="flex gap-1 flex-shrink-0">
+                                          <button
+                                            onClick={() => handleReopenClosed(wo.work_order_id)}
+                                            disabled={reopenLoading && reopeningWoId === wo.work_order_id}
+                                            className="text-xs font-semibold text-gray-600 bg-white border border-gray-300
+                                                       hover:bg-gray-50 px-2 py-0.5 rounded-lg transition disabled:opacity-60"
+                                          >
+                                            {reopenLoading && reopeningWoId === wo.work_order_id ? TC.reopeningClosed : TC.reopenClosed}
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex gap-1 flex-shrink-0">
+                                          <button
+                                            onClick={() => setEditingWO({ wo, taskId: task.task_id })}
+                                            className="text-xs text-blue-600 hover:text-blue-800 px-1.5 py-0.5
+                                                       rounded hover:bg-blue-50 transition-colors"
+                                          >
+                                            {TC.editWO}
+                                          </button>
+                                          <button
+                                            onClick={() => setDeletingWOKey({ woId: wo.work_order_id, taskId: task.task_id })}
+                                            className="text-xs text-red-500 hover:text-red-700 px-1.5 py-0.5
+                                                       rounded hover:bg-red-50 transition-colors"
+                                          >
+                                            {TC.deleteWO}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Send-back reason form (pending_review only) */}
+                                    {sendBackWoId === wo.work_order_id && (
+                                      <div className="pl-10 pr-4 py-3 bg-orange-50 border-t border-orange-100 space-y-2">
+                                        <p className="text-xs font-semibold text-orange-800">
+                                          {TC.sendBackReasonLabel}
+                                        </p>
+                                        <input
+                                          type="text"
+                                          value={sendBackReason}
+                                          onChange={e => setSendBackReason(e.target.value)}
+                                          onKeyDown={e => { if (e.key === 'Enter') handleSendBack(wo.work_order_id); if (e.key === 'Escape') { setSendBackWoId(null); setSendBackReason(''); } }}
+                                          placeholder={TC.sendBackReasonPlaceholder}
+                                          className="w-full rounded-lg border border-orange-200 px-3 py-1.5 text-xs
+                                                     bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                                          lang="hi"
+                                          autoFocus
+                                        />
+                                        <p className="text-xs text-orange-500">{TC.sendBackReasonHint}</p>
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={() => handleSendBack(wo.work_order_id)}
+                                            disabled={sendBackLoading}
+                                            className="text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600
+                                                       px-3 py-1.5 rounded-lg disabled:opacity-60 transition"
+                                          >
+                                            {sendBackLoading ? '…' : TC.sendBackSubmit}
+                                          </button>
+                                          <button
+                                            onClick={() => { setSendBackWoId(null); setSendBackReason(''); }}
+                                            className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5
+                                                       rounded-lg border border-gray-200 bg-white"
+                                          >
+                                            {TC.cancelForm}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* WO delete confirm */}
+                                    {isDeletingWO && (
+                                      <div className="flex items-center justify-between bg-red-50
+                                                      pl-10 pr-4 py-2 gap-3 border-t border-red-100">
+                                        <span className="text-xs text-red-700 font-medium">
+                                          {TC.deleteWOConfirm}
+                                        </span>
+                                        <div className="flex gap-2 flex-shrink-0">
+                                          <button
+                                            onClick={() => handleDeleteWO(task.task_id, wo.work_order_id)}
+                                            disabled={woDelLoading}
+                                            className="text-xs font-semibold text-white bg-red-600
+                                                       hover:bg-red-700 px-3 py-1 rounded-lg
+                                                       disabled:opacity-60"
+                                          >
+                                            {TC.deleteWOYes}
+                                          </button>
+                                          <button
+                                            onClick={() => setDeletingWOKey(null)}
+                                            disabled={woDelLoading}
+                                            className="text-xs text-gray-600 bg-white border border-gray-300
+                                                       hover:bg-gray-50 px-3 py-1 rounded-lg"
+                                          >
+                                            {TC.deleteNo}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+
+                                {/* Resources + completion flow (WO expanded) */}
+                                {wExpanded && !isEditingWO && (
+                                  <div className="pl-16 pr-4 pb-2 pt-1">
+                                    {wo.resources.length === 0 && addingResWoId !== wo.work_order_id ? (
+                                      <p className="text-xs text-gray-400 py-1">कोई लागत नहीं</p>
+                                    ) : (
+                                      <div className="divide-y divide-gray-100">
+                                        {wo.resources.map((r) => {
+                                          const rType = RESOURCE_TYPES[r.resource_type] ?? r.resource_type ?? '—';
+                                          const { formatted: rCostFmt } = formatMoney(r.cost ?? 0);
+                                          const isDeletingThisRes =
+                                            deletingRes?.woId === wo.work_order_id &&
+                                            deletingRes?.resId === r.resource_id;
+
+                                          return (
+                                            <div key={r.resource_id}>
+                                              <div className="flex items-center justify-between py-1.5 gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                  <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0">
+                                                    {rType}
+                                                  </span>
+                                                  <span className="text-xs text-gray-700 truncate">
+                                                    {r.name || '—'}
+                                                  </span>
+                                                  {r.qty != null && r.unit && (
+                                                    <span className="text-xs text-gray-400 flex-shrink-0">
+                                                      {r.qty} {r.unit}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <div className="flex items-center gap-1 flex-shrink-0">
+                                                  <span className="text-xs font-medium text-gray-700 tabular-nums">
+                                                    {rCostFmt}
+                                                  </span>
+                                                  <button
+                                                    onClick={() => setDeletingRes({ woId: wo.work_order_id, resId: r.resource_id })}
+                                                    className="text-xs text-red-400 hover:text-red-600 px-1 py-0.5
+                                                               rounded hover:bg-red-50 transition-colors"
+                                                  >
+                                                    {TC.deleteRes}
+                                                  </button>
+                                                </div>
+                                              </div>
+                                              {isDeletingThisRes && (
+                                                <div className="flex items-center justify-between
+                                                                bg-red-50 rounded px-2 py-1.5 mb-1 gap-3">
+                                                  <span className="text-xs text-red-700">{TC.deleteResConfirm}</span>
+                                                  <div className="flex gap-1.5">
+                                                    <button
+                                                      onClick={() => handleDeleteResource(wo.work_order_id, r.resource_id)}
+                                                      disabled={resDelLoading}
+                                                      className="text-xs font-semibold text-white bg-red-600
+                                                                 hover:bg-red-700 px-2.5 py-1 rounded-lg disabled:opacity-60"
+                                                    >
+                                                      {TC.deleteResYes}
+                                                    </button>
+                                                    <button
+                                                      onClick={() => setDeletingRes(null)}
+                                                      className="text-xs text-gray-600 bg-white border border-gray-300
+                                                                 hover:bg-gray-50 px-2.5 py-1 rounded-lg"
+                                                    >
+                                                      {TC.deleteNo}
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+
+                                    {/* Add resource to existing WO */}
+                                    {addingResWoId === wo.work_order_id ? (
+                                      <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {PREP_RESOURCE_TYPES.map(rt => (
+                                            <button
+                                              key={rt.value} type="button"
+                                              onClick={() => setNewResLine(p => ({...p, resource_type: rt.value}))}
+                                              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition
+                                                ${newResLine.resource_type === rt.value
+                                                  ? 'bg-green-600 text-white border-green-600'
+                                                  : 'bg-white text-gray-600 border-gray-200 hover:border-green-400'}`}
+                                            >
+                                              {rt.label}
+                                            </button>
+                                          ))}
+                                        </div>
+                                        <input
+                                          type="text"
+                                          value={newResLine.name}
+                                          onChange={e => setNewResLine(p => ({...p, name: e.target.value}))}
+                                          placeholder={TC.resourceName}
+                                          className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs
+                                                     focus:outline-none focus:ring-2 focus:ring-green-400"
+                                          lang="hi"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-gray-400">₹</span>
+                                          <input
+                                            type="number" inputMode="decimal" min="0"
+                                            value={newResLine.cost}
+                                            onChange={e => setNewResLine(p => ({...p, cost: e.target.value}))}
+                                            placeholder="राशि"
+                                            className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs
+                                                       focus:outline-none focus:ring-2 focus:ring-green-400"
+                                          />
+                                          <button
+                                            onClick={() => handleAddResource(wo.work_order_id)}
+                                            disabled={newResSaving}
+                                            className="text-xs font-semibold bg-green-600 text-white hover:bg-green-700
+                                                       px-3 py-1.5 rounded-lg disabled:opacity-60"
+                                          >
+                                            {newResSaving ? '…' : 'दर्ज करो'}
+                                          </button>
+                                          <button
+                                            onClick={() => { setAddingResWoId(null); setNewResLine(emptyResLine()); setNewResError(''); }}
+                                            className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5 rounded-lg border border-gray-200"
+                                          >
+                                            रद्द
+                                          </button>
+                                        </div>
+                                        {newResError && (
+                                          <p className="text-xs text-red-600">{newResError}</p>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => {
+                                          setAddingResWoId(wo.work_order_id);
+                                          setNewResLine(emptyResLine());
+                                          setNewResError('');
+                                          setExpandedWOs(prev => new Set([...prev, wo.work_order_id]));
+                                        }}
+                                        className="mt-1 text-xs text-green-700 font-medium hover:text-green-800"
+                                      >
+                                        {TC.addResource}
+                                      </button>
+                                    )}
+
+                                    {/* ── Latest note: worker completion OR supervisor send-back reason ── */}
+                                    {wo.completion_note && (() => {
+                                      const isSendBack = wo.completion_note.startsWith('↩ ');
+                                      const noteText   = isSendBack ? wo.completion_note.slice(2) : wo.completion_note;
+                                      return (
+                                        <div className="mt-3 border-t border-gray-100 pt-2">
+                                          <p className={`text-xs font-semibold mb-1 ${isSendBack ? 'text-red-500' : 'text-gray-500'}`}>
+                                            {isSendBack ? TC.sendBackNoteLabel : TC.completionNoteLabel}
+                                          </p>
+                                          <p className={`text-xs rounded-lg px-3 py-2 whitespace-pre-wrap border
+                                            ${isSendBack
+                                              ? 'text-red-900 bg-red-50 border-red-100'
+                                              : 'text-gray-800 bg-amber-50 border-amber-100'}`}>
+                                            {noteText}
+                                          </p>
+                                        </div>
+                                      );
+                                    })()}
+
+                                    {/* ── Worker completion submit (open/in_progress only) ── */}
+                                    {(wo.status === 'open' || wo.status === 'in_progress') && (
+                                      <div className="mt-2 border-t border-gray-100 pt-2">
+                                        {completingWO?.woId === wo.work_order_id ? (
+                                          <div className="space-y-2">
+                                            <p className="text-xs font-semibold text-gray-600">
+                                              {TC.completionLabel}
+                                            </p>
+                                            <textarea
+                                              value={completionComment}
+                                              onChange={e => setCompletionComment(e.target.value)}
+                                              placeholder={TC.completionPlaceholder}
+                                              rows={2}
+                                              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs
+                                                         focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                                              lang="hi"
+                                              autoFocus
+                                            />
+                                            <div className="flex gap-2">
+                                              <button
+                                                onClick={() => handleSubmitCompletion(wo.work_order_id)}
+                                                disabled={completionSaving}
+                                                className="text-xs font-semibold bg-amber-500 hover:bg-amber-600
+                                                           text-white px-3 py-1.5 rounded-lg disabled:opacity-60"
+                                              >
+                                                {completionSaving ? TC.submittingCompletion : TC.submitCompletionBtn}
+                                              </button>
+                                              <button
+                                                onClick={() => { setCompletingWO(null); setCompletionComment(''); }}
+                                                className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5
+                                                           rounded-lg border border-gray-200 bg-white"
+                                              >
+                                                {TC.cancelForm}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            onClick={() => {
+                                              setCompletingWO({ woId: wo.work_order_id, taskId: task.task_id });
+                                              setCompletionComment('');
+                                            }}
+                                            className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                                          >
+                                            {TC.submitCompletion}
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+
+                        {/* Add WO form or button */}
+                        {addingWoTaskId === task.task_id ? (
+                          <div className="px-10 py-3 border-t border-gray-100">
+                            <WOForm
+                              taskId={task.task_id}
+                              onSave={() => {
+                                setAddingWoTaskId(null);
+                                fetchAll();
+                              }}
+                              onCancel={() => setAddingWoTaskId(null)}
+                            />
+                          </div>
+                        ) : (
+                          <div className="px-10 pt-2 pb-2.5 border-t border-gray-100">
+                            <button
+                              onClick={() => {
+                                setAddingWoTaskId(task.task_id);
+                                setEditingWO(null);
+                              }}
+                              className="text-xs text-green-700 font-semibold hover:text-green-800"
+                            >
+                              {TC.addWO}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Add task form or button */}
+          {showAddTask ? (
+            <div className="px-4 py-3 border-t border-gray-100">
+              <TaskForm
+                cycleId={crop_cycle_id}
+                cycleFields={cycleFields}
+                onSave={() => { setShowAddTask(false); fetchAll(); }}
+                onCancel={() => setShowAddTask(false)}
+              />
+            </div>
+          ) : (
+            <div className="px-4 pt-2 pb-3 border-t border-gray-100">
+              <button
+                onClick={() => { setShowAddTask(true); setEditingTask(null); }}
+                className="flex items-center gap-1.5 text-sm font-medium text-orange-600
+                           hover:text-orange-700 py-1"
+              >
+                <Plus className="w-4 h-4" />
+                {TC.addTask}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── SALES ────────────────────────────────────────────────────────────── */}
       <Section title={S.salesHeading}>
         {sales.length === 0 ? (
           <p className="text-sm text-gray-400 py-3">{S.noSales}</p>
@@ -254,9 +1463,7 @@ export default function CycleDetailPage() {
                 <div className="flex items-start justify-between py-2.5 gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span className="text-sm text-gray-800 font-medium">
-                        {sale.buyer || '—'}
-                      </span>
+                      <span className="text-sm text-gray-800 font-medium">{sale.buyer || '—'}</span>
                       <span className="text-xs text-gray-400">{channelLabel}</span>
                       <span className="text-xs text-gray-400">{sale.sale_date}</span>
                       <span className="text-xs text-gray-400">
@@ -264,9 +1471,7 @@ export default function CycleDetailPage() {
                       </span>
                     </div>
                     {sale.notes && (
-                      <p className="text-xs text-gray-400 italic mt-0.5 truncate">
-                        {sale.notes}
-                      </p>
+                      <p className="text-xs text-gray-400 italic mt-0.5 truncate">{sale.notes}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -279,31 +1484,29 @@ export default function CycleDetailPage() {
                         { state: { season, crop_year: ctx.crop_year, crop_name, seed_category: seed_cat, sale } }
                       )}
                       className="text-xs text-blue-600 hover:text-blue-800 px-1.5 py-0.5
-                        rounded hover:bg-blue-50 transition-colors"
+                                 rounded hover:bg-blue-50 transition-colors"
                     >
                       {S.editSale}
                     </button>
                     <button
                       onClick={() => setDeletingId(sale.sale_id)}
                       className="text-xs text-red-500 hover:text-red-700 px-1.5 py-0.5
-                        rounded hover:bg-red-50 transition-colors"
+                                 rounded hover:bg-red-50 transition-colors"
                     >
                       {S.deleteSale}
                     </button>
                   </div>
                 </div>
-
-                {/* Inline delete confirm */}
                 {isDeleting && (
                   <div className="flex items-center justify-between bg-red-50 rounded-lg
-                    px-3 py-2.5 mb-1 gap-3">
+                                  px-3 py-2.5 mb-1 gap-3">
                     <span className="text-sm text-red-700 font-medium">{S.deleteConfirm}</span>
                     <div className="flex gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleDelete(sale.sale_id)}
                         disabled={deleteLoading}
                         className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700
-                          px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                                   px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
                       >
                         {S.deleteYes}
                       </button>
@@ -311,7 +1514,7 @@ export default function CycleDetailPage() {
                         onClick={() => setDeletingId(null)}
                         disabled={deleteLoading}
                         className="text-xs font-semibold text-gray-600 bg-white border border-gray-300
-                          hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors"
+                                   hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors"
                       >
                         {S.deleteNo}
                       </button>
@@ -329,7 +1532,7 @@ export default function CycleDetailPage() {
               { state: { season, crop_year: ctx.crop_year, crop_name, seed_category: seed_cat } }
             )}
             className="flex items-center gap-1.5 text-sm font-medium text-green-700
-              hover:text-green-800 py-1"
+                       hover:text-green-800 py-1"
           >
             <Plus className="w-4 h-4" />
             {S.addSale}
@@ -337,7 +1540,7 @@ export default function CycleDetailPage() {
         </div>
       </Section>
 
-      {/* ── YIELDS ─────────────────────────────────────────────────────────── */}
+      {/* ── YIELDS ───────────────────────────────────────────────────────────── */}
       <Section title={S.yieldsHeading}>
         {yields.length === 0 ? (
           <p className="text-sm text-gray-400 py-3">{S.noYields}</p>
@@ -374,30 +1577,29 @@ export default function CycleDetailPage() {
                         { state: { season, crop_year: ctx.crop_year, crop_name, seed_category: seed_cat, yield: y } }
                       )}
                       className="text-xs text-blue-600 hover:text-blue-800 px-1.5 py-0.5
-                        rounded hover:bg-blue-50 transition-colors"
+                                 rounded hover:bg-blue-50 transition-colors"
                     >
                       {YS.editYield}
                     </button>
                     <button
                       onClick={() => setDeletingYieldId(y.yield_id)}
                       className="text-xs text-red-500 hover:text-red-700 px-1.5 py-0.5
-                        rounded hover:bg-red-50 transition-colors"
+                                 rounded hover:bg-red-50 transition-colors"
                     >
                       {YS.deleteYield}
                     </button>
                   </div>
                 </div>
-
                 {isDeletingY && (
                   <div className="flex items-center justify-between bg-red-50 rounded-lg
-                    px-3 py-2.5 mb-1 gap-3">
+                                  px-3 py-2.5 mb-1 gap-3">
                     <span className="text-sm text-red-700 font-medium">{YS.deleteConfirm}</span>
                     <div className="flex gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleDeleteYield(y.yield_id)}
                         disabled={deleteYieldLoading}
                         className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700
-                          px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                                   px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
                       >
                         {YS.deleteYes}
                       </button>
@@ -405,7 +1607,7 @@ export default function CycleDetailPage() {
                         onClick={() => setDeletingYieldId(null)}
                         disabled={deleteYieldLoading}
                         className="text-xs font-semibold text-gray-600 bg-white border border-gray-300
-                          hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors"
+                                   hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors"
                       >
                         {YS.deleteNo}
                       </button>
@@ -423,7 +1625,7 @@ export default function CycleDetailPage() {
               { state: { season, crop_year: ctx.crop_year, crop_name, seed_category: seed_cat } }
             )}
             className="flex items-center gap-1.5 text-sm font-medium text-green-700
-              hover:text-green-800 py-1"
+                       hover:text-green-800 py-1"
           >
             <Plus className="w-4 h-4" />
             {YS.addYield}

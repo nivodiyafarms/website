@@ -86,6 +86,31 @@ def update_work_order(
 
 
 # -----------------------------
+# Delete Work Order
+# -----------------------------
+@router.delete("/{work_order_id}", status_code=status.HTTP_200_OK)
+def delete_work_order(
+    task_id: UUID,
+    work_order_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    work_order = (
+        db.query(WorkOrder)
+        .filter(
+            WorkOrder.task_id == task_id,
+            WorkOrder.work_order_id == work_order_id,
+        )
+        .first()
+    )
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work order not found")
+    db.delete(work_order)
+    db.commit()
+    return {"success": True, "message": "Deleted"}
+
+
+# -----------------------------
 # Get Work Orders for Task
 # -----------------------------
 @router.get("/", response_model=list[WorkOrderResponse])

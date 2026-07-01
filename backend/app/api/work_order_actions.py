@@ -6,7 +6,7 @@ import uuid as _uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,10 @@ class AssignRequest(BaseModel):
 
 class CompletionRequest(BaseModel):
     notes: Optional[str] = None
+
+
+class ReasonRequest(BaseModel):
+    reason: Optional[str] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -96,7 +100,7 @@ def submit_completion(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Worker marks WO done → status moves to pending_review. Cannot close."""
+    """Worker marks WO done → status moves to pending_review. Saves completion note if provided."""
     wo = _get_wo(db, work_order_id)
 
     if wo.status in (WorkOrderStatus.CLOSED, WorkOrderStatus.CANCELLED):
@@ -106,6 +110,18 @@ def submit_completion(
         )
 
     wo.status = WorkOrderStatus.PENDING_REVIEW
+
+    # Save completion comment as a Note on this WO (visible to supervisor in app + future WhatsApp)
+    if body.notes and body.notes.strip():
+        from app.models.note import Note
+        note = Note(
+            related_type='work_order',
+            related_id=wo.work_order_id,
+            text=body.notes.strip(),
+            author_id=None,  # TODO(auth): set from current_user once workers table linked to auth
+        )
+        db.add(note)
+
     db.commit()
     db.refresh(wo)
     return _to_resp(wo)
@@ -136,19 +152,31 @@ def close_work_order(
 @router.patch("/{work_order_id}/reopen", response_model=WorkOrderResponse)
 def reopen_work_order(
     work_order_id: str,
+    body: ReasonRequest = Body(default=ReasonRequest()),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Supervisor sends a pending_review WO back to open for rework."""
+    """Supervisor sends a WO back to open (from pending_review with reason, or from closed)."""
     wo = _get_wo(db, work_order_id)
 
-    if wo.status != WorkOrderStatus.PENDING_REVIEW:
+    if wo.status not in (WorkOrderStatus.PENDING_REVIEW, WorkOrderStatus.CLOSED):
         raise HTTPException(
             status_code=400,
-            detail="केवल 'समीक्षा बाकी' काम को वापस भेजा जा सकता है"
+            detail="केवल 'समीक्षा बाकी' या 'बंद' काम को वापस खोला जा सकता है"
         )
 
     wo.status = WorkOrderStatus.OPEN
+
+    if body.reason and body.reason.strip():
+        from app.models.note import Note
+        note = Note(
+            related_type='work_order',
+            related_id=wo.work_order_id,
+            text=f"↩ {body.reason.strip()}",
+            author_id=None,  # TODO(auth): set from current_user
+        )
+        db.add(note)
+
     db.commit()
     db.refresh(wo)
     return _to_resp(wo)
