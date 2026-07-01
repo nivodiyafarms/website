@@ -84,7 +84,11 @@ def _print_db_banner():
 # ---------------------------
 # CORS
 # ---------------------------
-vercel_frontend = os.getenv("FRONTEND_URL")
+# FRONTEND_URL: comma-separated list of allowed frontend origins.
+# Set this in each Render service's env vars to its corresponding Vercel URL.
+# Example (production): FRONTEND_URL=https://nivodiya-farms.vercel.app
+# Example (branch):     FRONTEND_URL=https://nivodiya-farms-feat-variety-model.vercel.app
+# allow_origin_regex also covers any *.vercel.app preview URL automatically.
 origins = [
     "http://localhost:3000",
     "http://localhost:3001",
@@ -95,8 +99,10 @@ origins = [
     "http://127.0.0.1:3002",
     "http://127.0.0.1:5173",
 ]
-if vercel_frontend:
-    origins.append(vercel_frontend.strip().rstrip("/"))
+for _url in os.getenv("FRONTEND_URL", "").split(","):
+    _url = _url.strip().rstrip("/")
+    if _url:
+        origins.append(_url)
 
 app.add_middleware(
     CORSMiddleware,
