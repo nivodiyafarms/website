@@ -44,6 +44,10 @@ class CropCycleCreate(BaseModel):
     # Optional fields
     incident_no: Optional[str] = None  # auto-generated if not provided
     seed_category: Optional[str] = None
+    seed_class: Optional[str] = None
+    seed_class_custom: Optional[str] = None
+    seed_stage: Optional[str] = None
+    seed_stage_custom: Optional[str] = None
     seed_quantity: Optional[float] = None
     cultivated_area: Optional[float] = None  # auto-set to sum of acres if fields provided
     expected_harvest_date: Optional[date] = None
@@ -77,10 +81,15 @@ class CropCycleCreate(BaseModel):
 class CropCycleUpdate(BaseModel):
     # All fields optional for updates
     field_code: Optional[str] = None
+    fields: Optional[List[CycleFieldIn]] = None  # replaces junction rows when provided
     crop_name: Optional[str] = None
     incident_no: Optional[str] = None
     season: Optional[str] = None
     seed_category: Optional[str] = None
+    seed_class: Optional[str] = None
+    seed_class_custom: Optional[str] = None
+    seed_stage: Optional[str] = None
+    seed_stage_custom: Optional[str] = None
     seed_quantity: Optional[float] = None
     cultivated_area: Optional[float] = None
     sowing_date: Optional[date] = None
@@ -122,8 +131,12 @@ class CropCycleResponse(BaseModel):
     crop_name: str
     
     seed_category: Optional[str] = None
+    seed_class: Optional[str] = None
+    seed_class_custom: Optional[str] = None
+    seed_stage: Optional[str] = None
+    seed_stage_custom: Optional[str] = None
     seed_quantity: Optional[float] = None
-    
+
     cultivated_area: Optional[float] = None  # Matches model field name
     season: Optional[str] = None
     

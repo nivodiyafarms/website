@@ -1,497 +1,610 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import BreadcrumbNav from "../components/BreadcrumbNav";
-import api from "../services/api";
-import NotesInterface from "../components/NotesInterface";
+/**
+ * GeneralPurpose — /general-purpose
+ * Saamanya kharch ledger. Posted-but-flagged review model:
+ *   - expense saves immediately (money already spent)
+ *   - supervisor verifies / voids after-the-fact
+ */
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Check, X, Pencil, Trash2 } from 'lucide-react';
+import BreadcrumbNav from '../components/BreadcrumbNav';
+import NotesInterface from '../components/NotesInterface';
+import { generalExpenseAPI } from '../services/api';
+import { formatMoney } from '../utils/money';
+import {
+  GE_CATEGORY_LABELS,
+  GE_SUBCATEGORIES,
+  GE_REVIEW_STATUS,
+  GE_STRINGS as S,
+} from '../strings/hi';
 
-const unitMap = {
-  labor: "दिन",
-  fuel: "लीटर",
-  material: "किलो",
-  machine: "घंटा",
-  water: "घंटा",
-  service: "दिन",
-  contract: "एकमुश्त",
-  construction: "दिन",
-};
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
 
-const subcategoryMap = {
-  fuel: [
-    "डीजल",
-    "पेट्रोल",
-    "जनरेटर ईंधन",
-    "पंप ईंधन"
-  ],
-  labor: [
-    "स्थायी मजदूर",
-    "दैनिक मजदूर",
-    "कटाई मजदूरी",
-    "बुवाई मजदूरी",
-    "निराई / गुड़ाई मजदूरी",
-    "सिंचाई मजदूरी",
-    "लोडिंग / अनलोडिंग"
-  ],
-  material: [
-    "बीज",
-    "खाद",
-    "कीटनाशक",
-    "जैविक खाद",
-    "सूक्ष्म पोषक तत्व",
-    "मल्चिंग शीट",
-    "पौध संरक्षण दवा"
-  ],
-  machine: [
-    "Tractor – Deutz Fahr 55E",
-    "Tractor – John Deere 5105",
-    "Tractor – Sonalika DI 734",
-    "Trolley – Big Size",
-    "Trolley – Medium Size",
-    "Thresher – Big Size",
-    "Thresher – Medium Size",
-    "Ridge Furrow Seed Drill",
-    "Normal Seed Drill",
-    "Maize Seed Drill",
-    "पंजा",
-    "सत्ता",
-    "Grading Machine",
-    "दुनाई वाला पंखा",
-    "Alternator (अल्टीनेटर)",
-    "Sprayer Tanker",
-    "अन्य मशीन / उपकरण"
-  ],
-  water: [
-    "सिंचाई पाइप",
-    "बोरवेल मरम्मत",
-    "मोटर / पंप मरम्मत",
-    "बिजली खर्च (पंप)",
-    "ड्रिप सिंचाई",
-    "स्प्रिंकलर सिस्टम",
-    "पानी टंकी",
-    "सिंचाई पाइपलाइन"
-  ],
-  service: [
-    "मशीन मरम्मत",
-    "मोटर मरम्मत",
-    "वाहन सर्विस",
-    "इलेक्ट्रिकल सर्विस",
-    "मशीन मेंटेनेंस"
-  ],
-  contract: [
-    "परिवहन",
-    "कटाई",
-    "सिंचाई",
-    "जुताई",
-    "रोपाई",
-    "फसल ढुलाई"
-  ],
-  construction: [
-    "सीमेंट",
-    "रेत",
-    "गिट्टी",
-    "ईंट",
-    "स्टील / सरिया",
-    "बजरी",
-    "प्लास्टर सामग्री",
-    "पानी टंकी",
-    "पाइप फिटिंग",
-    "इलेक्ट्रिकल वायर",
-    "स्विच / बोर्ड",
-    "टिन शेड",
-    "दरवाजा",
-    "खिड़की",
-    "पेंट",
-    "वॉटरप्रूफिंग",
-    "कंक्रीट मिक्स",
-    "टाइल्स",
-    "पाइप लाइन",
-    "अन्य निर्माण सामग्री"
-  ]
-};
+function FieldLabel({ text, required }) {
+  return (
+    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+      {text}{required && <span className="text-red-500 ml-0.5">*</span>}
+    </p>
+  );
+}
 
-const initialForm = {
-  general_expense_id: null,
-  category: "",
-  subcategory: "",
-  description: "",
-  date: "",
-  qty: "",
-  unit: "",
-  unit_rate: "",
-  total_cost: "",
-};
+function ReviewBadge({ status }) {
+  const s = GE_REVIEW_STATUS[status] ?? GE_REVIEW_STATUS.unreviewed;
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${s.color}`}>
+      {s.label}
+    </span>
+  );
+}
 
-export default function GeneralPurpose() {
-  const navigate = useNavigate();
-  const [form, setForm] = useState(initialForm);
-  const [expenses, setExpenses] = useState([]);
-  const [selectedExpense, setSelectedExpense] = useState(null);
-  const [showExpenseNotes, setShowExpenseNotes] = useState(false);
-  const [showExpenseModal, setShowExpenseModal] = useState(false);
+// ── Add / Edit form ──────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (form.qty && form.unit_rate) {
-      setForm((prev) => ({
-        ...prev,
-        total_cost: String(Number(prev.qty) * Number(prev.unit_rate)),
-      }));
-    }
-  }, [form.qty, form.unit_rate]);
+function ExpenseForm({ initial, onSave, onCancel }) {
+  const isEdit = Boolean(initial);
 
-  const loadExpenses = async () => {
+  const [category,    setCategory]    = useState(initial?.category ?? '');
+  const [subcategory, setSubcategory] = useState(initial?.subcategory ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [amount,      setAmount]      = useState(initial?.total_cost != null ? String(initial.total_cost) : '');
+  const [qty,         setQty]         = useState(initial?.qty != null ? String(initial.qty) : '');
+  const [unit,        setUnit]        = useState(initial?.unit ?? '');
+  const [unitRate,    setUnitRate]    = useState(initial?.unit_rate != null ? String(initial.unit_rate) : '');
+  const [date,        setDate]        = useState(initial?.date ?? todayStr());
+  const [errors,      setErrors]      = useState({});
+  const [saving,      setSaving]      = useState(false);
+
+  const subcatOptions = category ? (GE_SUBCATEGORIES[category] ?? []) : [];
+
+  function validate() {
+    const e = {};
+    if (!category) e.category = S.errors.category;
+    const n = parseFloat(amount);
+    if (!amount || isNaN(n) || n <= 0) e.amount = S.errors.amount;
+    return e;
+  }
+
+  async function handleSubmit() {
+    const e = validate();
+    if (Object.keys(e).length) { setErrors(e); return; }
+    setSaving(true);
+    const payload = {
+      category,
+      subcategory: subcategory || null,
+      description: description.trim() || null,
+      total_cost:  parseFloat(amount),
+      qty:         qty ? parseFloat(qty) : null,
+      unit:        unit.trim() || null,
+      unit_rate:   unitRate ? parseFloat(unitRate) : null,
+      date,
+    };
     try {
-      const response = await api.get("/general-expenses");
-      setExpenses(response.data || []);
-    } catch (err) {
-      console.error("Failed to load expenses", err);
-    }
-  };
-
-  useEffect(() => {
-    loadExpenses();
-  }, []);
-
-  const handleDeleteExpense = async (id) => {
-    if (!window.confirm("Delete this expense?")) return;
-    try {
-      await api.delete(`/general-expenses/${id}`);
-      await loadExpenses();
-    } catch (err) {
-      console.error("Delete failed", err);
-      alert("Failed to delete expense");
-    }
-  };
-
-  const handleEditExpense = (expense) => {
-    setForm({
-      general_expense_id: expense.general_expense_id,
-      category: expense.category ?? "",
-      subcategory: expense.subcategory ?? "",
-      description: expense.description ?? "",
-      date: expense.date ?? "",
-      qty: expense.qty != null ? String(expense.qty) : "",
-      unit: expense.unit ?? "",
-      unit_rate: expense.unit_rate != null ? String(expense.unit_rate) : "",
-      total_cost: expense.total_cost != null ? String(expense.total_cost) : "",
-    });
-    setShowExpenseModal(true);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.subcategory || !form.subcategory.trim()) {
-      alert("कृपया उप-श्रेणी चुनें");
-      return;
-    }
-    if (
-      !form.category ||
-      !form.qty ||
-      !form.unit ||
-      !form.unit_rate
-    ) {
-      alert("कृपया सभी आवश्यक फ़ील्ड भरें");
-      return;
-    }
-    try {
-      const payload = {
-        category: form.category,
-        subcategory: form.subcategory.trim(),
-        description: form.description,
-        date: form.date || null,
-        qty: Number(form.qty),
-        unit: form.unit,
-        unit_rate: Number(form.unit_rate),
-        total_cost: Number(form.total_cost),
-      };
-      if (form.general_expense_id) {
-        await api.put(`/general-expenses/${form.general_expense_id}`, payload);
+      if (isEdit) {
+        const res = await generalExpenseAPI.update(initial.general_expense_id, payload);
+        onSave(res.data);
       } else {
-        await api.post("/general-expenses", payload);
+        const res = await generalExpenseAPI.create(payload);
+        onSave(res.data);
       }
-      alert("Expense saved successfully");
-      await loadExpenses();
-      setShowExpenseModal(false);
-      setForm(initialForm);
     } catch (err) {
-      alert("Failed to save expense");
+      setSaving(false);
+      const detail = err?.response?.data?.detail ?? 'कुछ गड़बड़ हो गई।';
+      setErrors({ submit: detail });
     }
-  };
+  }
 
   return (
-    <div className="p-6">
-      <BreadcrumbNav
-        path={[
-          { name: "Dashboard", id: "/dashboard" },
-          { name: "General Expenses", id: null },
-        ]}
-        onNavigate={(path) => path && navigate(path)}
-      />
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">
+      <h3 className="text-base font-bold text-gray-800 mb-4">
+        {isEdit ? S.formEdit : S.formAdd}
+      </h3>
+      <div className="space-y-4">
 
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          General Expenses
-        </h1>
+        {/* श्रेणी */}
+        <div>
+          <FieldLabel text={S.categoryLabel} required />
+          <select
+            value={category}
+            onChange={e => { setCategory(e.target.value); setSubcategory(''); setErrors(v => ({ ...v, category: undefined })); }}
+            className={`w-full border rounded-xl px-4 py-3 bg-white text-base
+              focus:outline-none focus:ring-2 focus:ring-green-500
+              ${errors.category ? 'border-red-400' : 'border-gray-300'}`}
+          >
+            <option value="">— श्रेणी चुनो —</option>
+            {Object.entries(GE_CATEGORY_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+          {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
+        </div>
+
+        {/* उप-श्रेणी */}
+        {category && (
+          <div>
+            <FieldLabel text={S.subcategoryLabel} />
+            {subcatOptions.length > 0 ? (
+              <select
+                value={subcategory}
+                onChange={e => setSubcategory(e.target.value)}
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-white text-base
+                  focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="">— (वैकल्पिक) —</option>
+                {subcatOptions.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={subcategory}
+                onChange={e => setSubcategory(e.target.value)}
+                placeholder={S.subcategoryPlaceholder}
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-white text-base
+                  focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            )}
+          </div>
+        )}
+
+        {/* विवरण */}
+        <div>
+          <FieldLabel text={S.descLabel} />
+          <input
+            type="text"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder={S.descPlaceholder}
+            className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-white text-base
+              focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+        </div>
+
+        {/* राशि */}
+        <div>
+          <FieldLabel text={S.amountLabel} required />
+          <input
+            type="number"
+            inputMode="decimal"
+            value={amount}
+            onChange={e => { setAmount(e.target.value); setErrors(v => ({ ...v, amount: undefined })); }}
+            placeholder={S.amountPlaceholder}
+            className={`w-full border rounded-xl px-4 py-3 bg-white text-lg
+              focus:outline-none focus:ring-2 focus:ring-green-500
+              ${errors.amount ? 'border-red-400' : 'border-gray-300'}`}
+          />
+          {errors.amount && <p className="text-xs text-red-500 mt-1">{errors.amount}</p>}
+        </div>
+
+        {/* मात्रा + इकाई + दर (optional row) */}
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <FieldLabel text={S.qtyLabel} />
+            <input
+              type="number"
+              inputMode="decimal"
+              value={qty}
+              onChange={e => setQty(e.target.value)}
+              placeholder="—"
+              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 bg-white text-base
+                focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+          <div className="w-24">
+            <FieldLabel text={S.unitLabel} />
+            <input
+              type="text"
+              value={unit}
+              onChange={e => setUnit(e.target.value)}
+              placeholder="kg / L"
+              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 bg-white text-base
+                focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+          <div className="flex-1">
+            <FieldLabel text={S.rateLabel} />
+            <input
+              type="number"
+              inputMode="decimal"
+              value={unitRate}
+              onChange={e => setUnitRate(e.target.value)}
+              placeholder="—"
+              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 bg-white text-base
+                focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+        </div>
+
+        {/* तारीख */}
+        <div>
+          <FieldLabel text={S.dateLabel} />
+          <input
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-white text-base
+              focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+        </div>
+
+        {errors.submit && (
+          <p className="text-sm text-red-600">{errors.submit}</p>
+        )}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 py-3 rounded-xl font-bold text-base
+              bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]
+              disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            {saving ? S.saving : (isEdit ? S.update : S.submit)}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-5 py-3 rounded-xl font-medium text-base
+              bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+          >
+            {S.cancel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Void reason dialog ───────────────────────────────────────────────────────
+
+function VoidDialog({ onConfirm, onCancel }) {
+  const [reason, setReason] = useState('');
+  const ref = useRef(null);
+  useEffect(() => { ref.current?.focus(); }, []);
+
+  return (
+    <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+      <p className="text-sm font-semibold text-red-700">{S.voidReason}</p>
+      <textarea
+        ref={ref}
+        value={reason}
+        onChange={e => setReason(e.target.value)}
+        placeholder={S.voidReasonPlaceholder}
+        rows={2}
+        className="w-full border border-red-300 rounded-lg px-3 py-2 text-sm bg-white
+          focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+      />
+      <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => {
-            setForm(initialForm);
-            setShowExpenseModal(true);
-          }}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          onClick={() => reason.trim() && onConfirm(reason.trim())}
+          disabled={!reason.trim()}
+          className="px-4 py-2 rounded-lg text-sm font-bold bg-red-600 text-white
+            hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          + New Expense
+          {S.voidConfirm}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-white text-gray-600
+            border border-gray-300 hover:bg-gray-50 transition-colors"
+        >
+          {S.voidCancel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Delete confirm inline ────────────────────────────────────────────────────
+
+function DeleteConfirm({ onConfirm, onCancel }) {
+  return (
+    <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center gap-3">
+      <p className="text-sm text-gray-700 flex-1">{S.deleteConfirm}</p>
+      <button
+        type="button"
+        onClick={onConfirm}
+        className="px-3 py-1.5 rounded-lg text-sm font-bold bg-red-600 text-white hover:bg-red-700 transition-colors"
+      >
+        {S.deleteYes}
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+      >
+        {S.deleteNo}
+      </button>
+    </div>
+  );
+}
+
+// ── Single expense row ───────────────────────────────────────────────────────
+
+function ExpenseRow({ expense, onUpdated, onDeleted }) {
+  const [expanded,   setExpanded]   = useState(false);
+  const [showEdit,   setShowEdit]   = useState(false);
+  const [showVoid,   setShowVoid]   = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [busy,       setBusy]       = useState(false);
+
+  const { formatted: amtFmt } = formatMoney(expense.total_cost);
+  const catLabel = GE_CATEGORY_LABELS[expense.category] ?? expense.category ?? '—';
+  const statusKey = expense.review_status ?? 'unreviewed';
+
+  async function handleVerify() {
+    setBusy(true);
+    try {
+      const res = await generalExpenseAPI.verify(expense.general_expense_id);
+      onUpdated(res.data);
+    } finally { setBusy(false); }
+  }
+
+  async function handleVoid(reason) {
+    setBusy(true);
+    try {
+      const res = await generalExpenseAPI.void(expense.general_expense_id, reason);
+      onUpdated(res.data);
+      setShowVoid(false);
+    } finally { setBusy(false); }
+  }
+
+  async function handleDelete() {
+    setBusy(true);
+    try {
+      await generalExpenseAPI.delete(expense.general_expense_id);
+      onDeleted(expense.general_expense_id);
+    } finally { setBusy(false); }
+  }
+
+  if (showEdit) {
+    return (
+      <ExpenseForm
+        initial={expense}
+        onSave={updated => { onUpdated(updated); setShowEdit(false); }}
+        onCancel={() => setShowEdit(false)}
+      />
+    );
+  }
+
+  return (
+    <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden
+      ${statusKey === 'void' ? 'opacity-60 border-gray-200' : 'border-gray-200'}`}>
+
+      {/* ── Summary row (clickable) ── */}
+      <div
+        className="px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors select-none"
+        onClick={() => setExpanded(v => !v)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => e.key === 'Enter' && setExpanded(v => !v)}
+      >
+        <div className="flex items-start justify-between gap-3">
+
+          {/* Left: ID + category + description */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-[11px] font-bold text-gray-400 shrink-0 bg-gray-100 px-1.5 py-0.5 rounded">
+                {expense.expense_no ?? '—'}
+              </span>
+              <span className="font-semibold text-gray-800 text-sm">{catLabel}</span>
+              {expense.subcategory && (
+                <span className="text-gray-500 text-xs">· {expense.subcategory}</span>
+              )}
+            </div>
+            {expense.description && (
+              <p className="text-sm text-gray-600 mt-0.5 truncate">{expense.description}</p>
+            )}
+          </div>
+
+          {/* Right: amount + date + badge */}
+          <div className="text-right shrink-0">
+            <p className="font-bold text-gray-900 text-base">{amtFmt}</p>
+            {expense.date && (
+              <p className="text-[11px] text-gray-400 mt-0.5">{expense.date}</p>
+            )}
+            <div className="mt-1">
+              <ReviewBadge status={statusKey} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Expanded detail ── */}
+      {expanded && (
+        <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
+
+          {/* Quantity / rate row */}
+          {(expense.qty != null || expense.unit_rate != null) && (
+            <div className="flex gap-4 text-sm text-gray-600">
+              {expense.qty != null && (
+                <span>मात्रा: <strong>{expense.qty}</strong>{expense.unit ? ` ${expense.unit}` : ''}</span>
+              )}
+              {expense.unit_rate != null && (
+                <span>दर: <strong>₹{expense.unit_rate}</strong></span>
+              )}
+            </div>
+          )}
+
+          {/* Void reason */}
+          {statusKey === 'void' && expense.void_reason && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
+              <span className="font-semibold">रद्द कारण: </span>{expense.void_reason}
+            </div>
+          )}
+
+          {/* Notes — inline, not at bottom of page */}
+          <NotesInterface
+            relatedType="general_expense"
+            relatedId={expense.general_expense_id}
+          />
+
+          {/* Action buttons */}
+          <div className="flex flex-wrap gap-2 pt-1">
+            {statusKey !== 'verified' && statusKey !== 'void' && (
+              <button
+                type="button"
+                onClick={handleVerify}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
+                  bg-green-50 text-green-700 border border-green-200 hover:bg-green-100
+                  disabled:opacity-50 transition-colors"
+              >
+                <Check className="w-3.5 h-3.5" />
+                {S.verify}
+              </button>
+            )}
+            {statusKey !== 'void' && (
+              <button
+                type="button"
+                onClick={() => setShowEdit(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
+                  bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                {S.edit}
+              </button>
+            )}
+            {statusKey !== 'void' && (
+              <button
+                type="button"
+                onClick={() => { setShowVoid(v => !v); setShowDelete(false); }}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
+                  bg-red-50 text-red-700 border border-red-200 hover:bg-red-100
+                  disabled:opacity-50 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                {S.void}
+              </button>
+            )}
+            {/* Delete — always available (hard delete of void rows is fine) */}
+            <button
+              type="button"
+              onClick={() => { setShowDelete(v => !v); setShowVoid(false); }}
+              disabled={busy}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
+                bg-gray-50 text-red-600 border border-red-100 hover:bg-red-50
+                disabled:opacity-50 transition-colors ml-auto"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {showVoid   && <VoidDialog onConfirm={handleVoid} onCancel={() => setShowVoid(false)} />}
+          {showDelete && <DeleteConfirm onConfirm={handleDelete} onCancel={() => setShowDelete(false)} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+export default function GeneralPurpose() {
+  const [expenses, setExpenses] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState(null);
+  const [showForm, setShowForm] = useState(false);
+
+  async function loadExpenses() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await generalExpenseAPI.list();
+      setExpenses(res.data ?? []);
+    } catch {
+      setError('खर्चों की सूची नहीं आई।');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadExpenses(); }, []);
+
+  function handleCreated(newExp) {
+    setExpenses(prev => [newExp, ...prev]);
+    setShowForm(false);
+  }
+
+  function handleUpdated(updated) {
+    setExpenses(prev => prev.map(e =>
+      e.general_expense_id === updated.general_expense_id ? updated : e
+    ));
+  }
+
+  function handleDeleted(id) {
+    setExpenses(prev => prev.filter(e => e.general_expense_id !== id));
+  }
+
+  const totalActive = expenses
+    .filter(e => (e.review_status ?? 'unreviewed') !== 'void')
+    .reduce((sum, e) => sum + (e.total_cost ?? 0), 0);
+
+  const { formatted: totalFmt } = formatMoney(totalActive);
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 pt-5 pb-16 md:pt-8">
+
+      <BreadcrumbNav items={[{ label: S.heading }]} />
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{S.heading}</h1>
+          {!loading && expenses.length > 0 && (
+            <p className="text-sm text-gray-400 mt-0.5">कुल: {totalFmt}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowForm(v => !v)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-sm
+            bg-green-600 text-white hover:bg-green-700 active:scale-[0.98] transition-all"
+        >
+          <Plus className="w-4 h-4" />
+          {S.addExpense}
         </button>
       </div>
 
-      <div className="mt-4">
-        <h2 className="text-lg font-semibold mb-4">Saved Expenses</h2>
-        <table className="w-full border border-gray-200 rounded-lg">
-          <thead className="bg-gray-50 text-sm">
-            <tr>
-              <th className="p-2 text-left">Category</th>
-              <th className="p-2 text-left">Subcategory</th>
-              <th className="p-2 text-left">Total</th>
-              <th className="p-2 text-left">Date</th>
-              <th className="p-2 text-left">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {expenses.map((exp) => (
-              <tr key={exp.general_expense_id} className="border-t">
-                <td className="p-2">{exp.category}</td>
-                <td className="p-2">{exp.subcategory ?? ""}</td>
-                <td className="p-2">₹ {exp.total_cost != null ? Number(exp.total_cost).toLocaleString() : "0"}</td>
-                <td className="p-2">{exp.date ?? ""}</td>
-                <td className="p-2 space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => handleEditExpense(exp)}
-                    className="px-3 py-1 text-sm bg-yellow-100 hover:bg-yellow-200 rounded"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteExpense(exp.general_expense_id)}
-                    className="px-3 py-1 text-sm bg-red-100 hover:bg-red-200 rounded"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedExpense(exp);
-                      setShowExpenseNotes((prev) => !prev);
-                    }}
-                    className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded"
-                  >
-                    💬 Notes
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {showExpenseNotes && selectedExpense?.general_expense_id && (
-        <div className="mt-6 border border-gray-200 rounded-lg p-4 bg-gray-50">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h3 className="font-semibold text-gray-900">
-                Notes for: {selectedExpense.category}
-                {selectedExpense.subcategory ? ` — ${selectedExpense.subcategory}` : ""}
-              </h3>
-              <p className="text-sm text-gray-600">
-                ₹ {selectedExpense.total_cost != null
-                  ? Number(selectedExpense.total_cost).toLocaleString()
-                  : "0"}
-                {selectedExpense.date ? ` • ${selectedExpense.date}` : ""}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setShowExpenseNotes(false);
-                setSelectedExpense(null);
-              }}
-              className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
-            >
-              Close
-            </button>
-          </div>
-          <NotesInterface
-            relatedType="expense"
-            relatedId={selectedExpense.general_expense_id}
-          />
-        </div>
+      {/* Inline add form */}
+      {showForm && (
+        <ExpenseForm
+          onSave={handleCreated}
+          onCancel={() => setShowForm(false)}
+        />
       )}
 
-      {showExpenseModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-          <div className="bg-white w-full max-w-lg p-6 rounded-lg shadow-lg">
-            <h2 className="text-lg font-semibold mb-4">
-              {form.general_expense_id ? "Edit Expense" : "New Expense"}
-            </h2>
+      {/* States */}
+      {loading && (
+        <p className="text-center text-gray-400 py-12">लोड हो रहा है…</p>
+      )}
+      {error && (
+        <p className="text-center text-red-500 py-8">{error}</p>
+      )}
 
-            <form
-              id="expense-form"
-              onSubmit={handleSubmit}
-              className="grid grid-cols-1 md:grid-cols-2 gap-4"
-            >
-              <div>
-                <label className="text-sm font-medium block mb-1">श्रेणी</label>
-                <select
-                  value={form.category}
-                  onChange={(e) => {
-                    const selected = e.target.value;
-                    setForm({
-                      ...form,
-                      category: selected,
-                      unit: unitMap[selected] || "",
-                      subcategory: "",
-                    });
-                  }}
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">चुनें</option>
-                  <option value="labor">मज़दूर</option>
-                  <option value="material">सामग्री</option>
-                  <option value="fuel">ईंधन</option>
-                  <option value="machine">मशीन</option>
-                  <option value="service">सेवा</option>
-                  <option value="water">पानी</option>
-                  <option value="contract">ठेका</option>
-                  <option value="construction">निर्माण</option>
-                  <option value="other">अन्य</option>
-                </select>
-              </div>
-
-              {subcategoryMap[form.category] && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">उप-श्रेणी</label>
-                  <select
-                    value={form.subcategory}
-                    onChange={(e) =>
-                      setForm({ ...form, subcategory: e.target.value })
-                    }
-                    className="w-full border border-gray-300 rounded-lg p-2"
-                  >
-                    <option value="">चुनें</option>
-                    {subcategoryMap[form.category].map((sub) => (
-                      <option key={sub} value={sub}>
-                        {sub}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {form.category === "other" && (
-                <div>
-                  <label className="text-sm font-medium block mb-1">उप-श्रेणी</label>
-                  <input
-                    type="text"
-                    value={form.subcategory}
-                    onChange={(e) =>
-                      setForm({ ...form, subcategory: e.target.value })
-                    }
-                    placeholder="विवरण दर्ज करें"
-                    className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-              )}
-
-              <div className="md:col-span-2">
-                <label className="text-sm font-medium block mb-1">विवरण</label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                  className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-primary-500"
-                  rows={2}
-                  placeholder="विवरण (वैकल्पिक)"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium block mb-1">तारीख</label>
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium block mb-1">मात्रा</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.qty}
-                  onChange={(e) => setForm({ ...form, qty: e.target.value })}
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="0"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium block mb-1">इकाई</label>
-                <input
-                  type="text"
-                  value={form.unit}
-                  onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="दिन, किलो, लीटर..."
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium block mb-1">दर (₹)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.unit_rate}
-                  onChange={(e) =>
-                    setForm({ ...form, unit_rate: e.target.value })
-                  }
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium block mb-1">कुल लागत (₹)</label>
-                <input
-                  type="text"
-                  value={form.total_cost}
-                  readOnly
-                  className="w-full mt-1 p-2 border rounded-lg bg-gray-50"
-                  placeholder="स्वचालित"
-                />
-              </div>
-            </form>
-
-            <div className="flex justify-end mt-4 gap-2">
-              <button
-                type="button"
-                onClick={() => setShowExpenseModal(false)}
-                className="px-4 py-2 bg-gray-200 rounded"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="expense-form"
-                className="px-4 py-2 bg-blue-600 text-white rounded"
-              >
-                Save
-              </button>
+      {/* List */}
+      {!loading && !error && (
+        <div className="space-y-3">
+          {expenses.length === 0 && !showForm ? (
+            <div className="text-center py-16 text-gray-400">
+              <p className="text-4xl mb-3">📋</p>
+              <p>{S.empty}</p>
             </div>
-          </div>
+          ) : (
+            expenses.map(e => (
+              <ExpenseRow
+                key={e.general_expense_id}
+                expense={e}
+                onUpdated={handleUpdated}
+                onDeleted={handleDeleted}
+              />
+            ))
+          )}
         </div>
       )}
     </div>

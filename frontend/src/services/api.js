@@ -154,6 +154,19 @@ export const workersAPI = {
 };
 
 /* ======================
+   GENERAL EXPENSES
+====================== */
+
+export const generalExpenseAPI = {
+  list:   ()           => api.get("/general-expenses/"),
+  create: (data)       => api.post("/general-expenses/", data),
+  update: (id, data)   => api.put(`/general-expenses/${id}`, data),
+  delete: (id)         => api.delete(`/general-expenses/${id}`),
+  verify: (id)         => api.patch(`/general-expenses/${id}/verify`),
+  void:   (id, reason) => api.patch(`/general-expenses/${id}/void`, null, { params: { reason } }),
+};
+
+/* ======================
    WORK ORDER LIFECYCLE ACTIONS
 ====================== */
 

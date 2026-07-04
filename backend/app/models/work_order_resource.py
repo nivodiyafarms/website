@@ -43,6 +43,9 @@ class WorkOrderResource(Base):
         nullable=True
     )
 
+    # resource_type_custom: free text when resource_type='other' (Option B अन्य pattern)
+    resource_type_custom = Column(String(200), nullable=True)
+
     # Resource details — Numeric() without precision to match DB
     name = Column(Text, nullable=True)
     qty = Column(Numeric(), nullable=True)

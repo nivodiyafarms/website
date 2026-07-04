@@ -13,6 +13,7 @@ from app.models.user import User
 from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse
 from app.utils.id_generator import generate_task_id
 from app.models.work_order import WorkOrder
+from app.models.task_field import TaskField
 from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(
@@ -38,24 +39,30 @@ def create_task(
     # Step A: Auto-generate task_number (TSK0001, TSK0002, etc.)
     task_number = generate_task_id(db)
 
-    # Step B: Set created_by_id from authenticated user (never from frontend)
-    # Step C: Create Task object with auto-generated fields
+    # Resolve field list: prefer field_ids (multi); fall back to single field_id
+    field_ids = payload.field_ids or ([payload.field_id] if payload.field_id else [])
+    primary_field = field_ids[0] if field_ids else None
+
     task = Task(
-        task_number=task_number,  # Auto-generated, never from frontend
+        task_number=task_number,
         crop_cycle_id=crop_cycle_id,
         category=payload.category,
         subcategory=payload.subcategory,
         short_description=payload.short_description,
         description=payload.description,
         assigned_to_id=payload.assigned_to_id or current_user.user_id,
-        field_id=payload.field_id,
-        created_by_id=current_user.user_id,  # Always from auth, never from frontend
+        field_id=primary_field,      # legacy column — first selected field
+        created_by_id=current_user.user_id,
         severity=payload.severity,
         status=TaskStatus.NEW,
     )
 
-    # Step D: Commit and return response
     db.add(task)
+    db.flush()  # get task_id before creating junction rows
+
+    for fid in field_ids:
+        db.add(TaskField(task_id=task.task_id, field_id=fid))
+
     db.commit()
     db.refresh(task)
     return task
@@ -97,10 +104,13 @@ def update_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # Get only fields that were explicitly set (partial update)
     update_data = payload.model_dump(exclude_unset=True)
-    
-    # Status rules validation
+
+    # Extract field_ids before scalar loop (no column on Task)
+    field_ids = update_data.pop("field_ids", None)
+    # Also pop legacy field_id — we set it ourselves below if field_ids provided
+    incoming_field_id = update_data.pop("field_id", None)
+
     if "status" in update_data:
         status_value = update_data["status"]
         if status_value and str(status_value).lower() == "on_hold":
@@ -110,13 +120,27 @@ def update_task(
                     detail="on_hold_reason is required when status is ON_HOLD",
                 )
         if status_value and str(status_value).lower() == "resolved":
-            # Auto-set resolved_date if not provided
             if "resolved_date" not in update_data:
                 update_data["resolved_date"] = datetime.utcnow()
 
-    # Apply updates
     for key, value in update_data.items():
         setattr(task, key, value)
+
+    # Update junction rows when field_ids provided (prefer) or single field_id
+    if field_ids is not None:
+        db.query(TaskField).filter(TaskField.task_id == task.task_id).delete(
+            synchronize_session=False
+        )
+        for fid in field_ids:
+            db.add(TaskField(task_id=task.task_id, field_id=fid))
+        task.field_id = field_ids[0] if field_ids else None
+    elif incoming_field_id is not None:
+        # Legacy single-field update: replace junction with one row
+        db.query(TaskField).filter(TaskField.task_id == task.task_id).delete(
+            synchronize_session=False
+        )
+        db.add(TaskField(task_id=task.task_id, field_id=incoming_field_id))
+        task.field_id = incoming_field_id
 
     db.commit()
     db.refresh(task)

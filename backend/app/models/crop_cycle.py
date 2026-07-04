@@ -83,6 +83,12 @@ class CropCycle(Base):
     # Crop details
     crop_name = Column(String(100), nullable=False)
     seed_category = Column(String(100), nullable=True)
+    # Seed certification class (TL/Certified/Foundation/Breeder/Registered/other)
+    seed_class = Column(String(50), nullable=True)
+    seed_class_custom = Column(String(200), nullable=True)  # free text when seed_class='other'
+    # Seed stage (graded/raw/other)
+    seed_stage = Column(String(50), nullable=True)
+    seed_stage_custom = Column(String(200), nullable=True)  # free text when seed_stage='other'
     season = Column(String(20), nullable=False)  # kharif / rabi / zaid — NOT NULL in DB
     # crop_year = calendar year of sowing. UI: "{season} {crop_year}" e.g. "Kharif 2025".
     # NOT unique alone — identity is season + crop_year + crop_name + seed_category.

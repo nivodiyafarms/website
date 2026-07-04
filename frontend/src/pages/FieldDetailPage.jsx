@@ -78,10 +78,13 @@ export default function FieldDetailPage() {
         {S.back}
       </button>
 
-      {/* Header */}
+      {/* Header: field_id bold primary, name muted below */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 leading-tight">{name}</h1>
-        <p className="text-sm text-gray-400 mt-0.5">{S.acres(area_acre)}</p>
+        <h1 className="text-2xl font-bold font-mono text-gray-900 leading-tight">{field_id}</h1>
+        {name && (
+          <p className="text-sm text-gray-500 mt-0.5">{name}</p>
+        )}
+        <p className="text-xs text-gray-400 mt-0.5">{S.acres(area_acre)}</p>
       </div>
 
       {/* ── Prep cost summary panel ───────────────────────────────────────── */}

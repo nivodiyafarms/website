@@ -140,6 +140,11 @@ export const CYCLE_DETAIL_STRINGS = {
   tasksHeading:  'काम',
   noTasks:       'अभी कोई काम नहीं',
   acres:         (n) => `${n} एकड़`,
+  totalAcresFull:(n) => `कुल: ${n} एकड़`,
+  editCycle:     'बदलो',
+  editCycleTitle:'फसल चक्र बदलो',
+  saveCycle:     'बदलाव सहेजो',
+  savingCycle:   'सहेजा जा रहा है…',
 };
 
 // ── Sales channel labels (shared: cycle detail list + new-sale form) ──────────
@@ -386,8 +391,10 @@ export const TASKS_CRUD = {
   tipanniPlaceholder:'जैसे: बीज बुवाई, DAP खाद, सिंचाई',
   varnanLabel:       'विवरण (वैकल्पिक)',
   varnanPlaceholder: 'ज़्यादा जानकारी…',
-  fieldLabel:        'खेत',
+  fieldLabel:        'खेत (एक या ज़्यादा)',
   fieldNone:         'कोई खेत नहीं',
+  workerLabel:       'कर्मचारी को सौंपो (वैकल्पिक)',
+  workerNone:        '— कोई नहीं —',
   categoryLabel:     'श्रेणी',
   categoryPlaceholder: 'चुनें',
   subcategoryLabel:  'उप-श्रेणी',
@@ -507,6 +514,21 @@ export const FIELD_DETAIL_PREP = {
 };
 
 // ── New cycle form ────────────────────────────────────────────────────────────
+// ── Seed class + stage options (shared: new-cycle form + cycle edit) ───────────
+export const SEED_CLASS_OPTIONS = [
+  { value: 'TL',          label: 'TL (Truthfully Labelled)' },
+  { value: 'certified',   label: 'Certified' },
+  { value: 'foundation',  label: 'Foundation' },
+  { value: 'breeder',     label: 'Breeder' },
+  { value: 'registered',  label: 'Registered' },
+  { value: 'other',       label: 'अन्य' },
+];
+export const SEED_STAGE_OPTIONS = [
+  { value: 'graded', label: 'Graded (ग्रेडेड)' },
+  { value: 'raw',    label: 'Raw (कच्चा)' },
+  { value: 'other',  label: 'अन्य' },
+];
+
 export const NEW_CYCLE = {
   title:              'नई फसल',
   seasonLocked:       'सीज़न (तय)',
@@ -518,6 +540,10 @@ export const NEW_CYCLE = {
   varietyLabel:       'किस्म / बीज',
   varietyPlaceholder: 'जैसे: JS 335, NI 8 — English में लिखें',
   varietyNote:        'किस्म का नाम कभी नहीं बदला जाता',
+  seedClassLabel:     'बीज श्रेणी',
+  seedClassPlaceholder: 'श्रेणी लिखो',
+  seedStageLabel:     'बीज अवस्था (वैकल्पिक)',
+  seedStagePlaceholder: 'अवस्था लिखो',
   sowingLabel:        'बुआई की तारीख',
   seedQtyLabel:       'बीज मात्रा (kg) — वैकल्पिक',
   seedQtyPlaceholder: 'जैसे: 40',
@@ -527,10 +553,11 @@ export const NEW_CYCLE = {
   submit:             'फसल दर्ज करो',
   saving:             'दर्ज हो रहा है…',
   errors: {
-    crop:    'फसल का नाम भरो',
-    sowing:  'बुआई की तारीख चुनो',
-    noField: 'कम से कम एक खेत चुनो',
-    acres:   'रक़बा 0 से ज़्यादा होना चाहिए',
+    crop:       'फसल का नाम भरो',
+    seedClass:  'बीज श्रेणी चुनो',
+    sowing:     'बुआई की तारीख चुनो',
+    noField:    'कम से कम एक खेत चुनो',
+    acres:      'रक़बा 0 से ज़्यादा होना चाहिए',
   },
 };
 
@@ -559,5 +586,80 @@ export const NEW_SALE = {
     qty:     'मात्रा सही भरो (0 से ज़्यादा)',
     rate:    'भाव सही भरो (0 से ज़्यादा)',
     channel: 'किसको बेचा — चुनो',
+  },
+};
+
+// ── General Expense screen ────────────────────────────────────────────────────
+export const GE_CATEGORY_LABELS = {
+  labor:        'मज़दूर',
+  material:     'सामग्री',
+  fuel:         'ईंधन',
+  machine:      'मशीन',
+  service:      'सेवा',
+  water:        'पानी / सिंचाई',
+  contract:     'ठेका',
+  construction: 'निर्माण',
+  other:        'अन्य',
+};
+
+export const GE_SUBCATEGORIES = {
+  fuel:         ['डीजल','पेट्रोल','जनरेटर ईंधन','पंप ईंधन'],
+  labor:        ['स्थायी मजदूर','दैनिक मजदूर','कटाई मजदूरी','बुवाई मजदूरी','निराई / गुड़ाई मजदूरी','सिंचाई मजदूरी','लोडिंग / अनलोडिंग'],
+  material:     ['बीज','खाद','कीटनाशक','जैविक खाद','सूक्ष्म पोषक तत्व','मल्चिंग शीट','पौध संरक्षण दवा'],
+  machine:      ['Tractor – Deutz Fahr 55E','Tractor – John Deere 5105','Tractor – Sonalika DI 734','Trolley – Big Size','Trolley – Medium Size','Thresher – Big Size','Thresher – Medium Size','Ridge Furrow Seed Drill','Normal Seed Drill','Maize Seed Drill','पंजा','सत्ता','Grading Machine','दुनाई वाला पंखा','Alternator (अल्टीनेटर)','Sprayer Tanker','अन्य मशीन / उपकरण'],
+  water:        ['सिंचाई पाइप','बोरवेल मरम्मत','मोटर / पंप मरम्मत','बिजली खर्च (पंप)','ड्रिप सिंचाई','स्प्रिंकलर सिस्टम','पानी टंकी','सिंचाई पाइपलाइन'],
+  service:      ['मशीन मरम्मत','मोटर मरम्मत','वाहन सर्विस','इलेक्ट्रिकल सर्विस','मशीन मेंटेनेंस'],
+  contract:     ['परिवहन','कटाई','सिंचाई','जुताई','रोपाई','फसल ढुलाई'],
+  construction: ['सीमेंट','रेत','गिट्टी','ईंट','स्टील / सरिया','बजरी','प्लास्टर सामग्री','पानी टंकी','पाइप फिटिंग','इलेक्ट्रिकल वायर','स्विच / बोर्ड','टिन शेड','दरवाजा','खिड़की','पेंट','वॉटरप्रूफिंग','कंक्रीट मिक्स','टाइल्स','पाइप लाइन','अन्य निर्माण सामग्री'],
+};
+
+export const GE_REVIEW_STATUS = {
+  unreviewed: { label: 'अपुष्ट',   color: 'bg-yellow-100 text-yellow-800' },
+  verified:   { label: 'सत्यापित', color: 'bg-green-100  text-green-800'  },
+  void:       { label: 'रद्द',     color: 'bg-red-100    text-red-800'    },
+};
+
+export const GE_STRINGS = {
+  heading:          'सामान्य खर्चे',
+  addExpense:       '+ खर्चा जोड़ो',
+  empty:            'अभी कोई खर्चा नहीं',
+  // form
+  formAdd:          'नया खर्चा',
+  formEdit:         'खर्चा बदलो',
+  categoryLabel:    'श्रेणी',
+  subcategoryLabel: 'उप-श्रेणी',
+  subcategoryPlaceholder: 'उप-श्रेणी लिखो',
+  descLabel:        'विवरण (वैकल्पिक)',
+  descPlaceholder:  'और जानकारी…',
+  amountLabel:      'राशि (₹)',
+  amountPlaceholder:'जैसे: 2500',
+  qtyLabel:         'मात्रा (वैकल्पिक)',
+  unitLabel:        'इकाई',
+  rateLabel:        'दर (₹)',
+  dateLabel:        'तारीख',
+  submit:           'खर्चा दर्ज करो',
+  update:           'बदलाव सहेजो',
+  saving:           'दर्ज हो रहा है…',
+  cancel:           'रद्द करो',
+  // row actions
+  verify:           'सत्यापित करो',
+  edit:             'बदलो',
+  void:             'रद्द करो',
+  voidReason:       'रद्द का कारण',
+  voidReasonPlaceholder: 'कारण लिखो…',
+  voidConfirm:      'रद्द करो',
+  voidCancel:       'वापस',
+  notes:            'टिप्पणी',
+  addNote:          '+ टिप्पणी जोड़ो',
+  notePlaceholder:  'टिप्पणी लिखो…',
+  noteSave:         'दर्ज',
+  // delete
+  deleteConfirm:    'यह खर्चा हटाना है?',
+  deleteYes:        'हाँ, हटाओ',
+  deleteNo:         'रहने दो',
+  // errors
+  errors: {
+    category: 'श्रेणी चुनो',
+    amount:   'राशि 0 से ज़्यादा होनी चाहिए',
   },
 };

@@ -173,6 +173,7 @@ class Task(Base):
     # Relationships
     crop_cycle = relationship("CropCycle", backref="tasks")
     field = relationship("Field", foreign_keys=[field_id])
+    task_fields = relationship("TaskField", back_populates="task", cascade="all, delete-orphan")
     work_orders = relationship("WorkOrder", back_populates="task")
     assigned_to = relationship("User", foreign_keys=[assigned_to_id])
     created_by = relationship("User", foreign_keys=[created_by_id])

@@ -181,14 +181,19 @@ export default function NewYieldPage() {
                   key={f.field_id}
                   type="button"
                   onClick={() => setFieldId(f.field_id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors
+                  className={`px-4 py-2 rounded-lg text-sm border transition-colors text-left
                     ${fieldId === f.field_id
                       ? 'bg-green-600 text-white border-green-600'
                       : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
                     }`}
                 >
-                  {f.name ?? f.field_id}
-                  {f.allocated_acres ? ` · ${f.allocated_acres} एकड़` : ''}
+                  <span className="font-bold font-mono">{f.field_id}</span>
+                  {f.allocated_acres ? <span className="opacity-75"> · {f.allocated_acres}एकड़</span> : ''}
+                  {f.name && f.name !== f.field_id && (
+                    <span className={`block text-[10px] leading-tight mt-0.5 ${fieldId === f.field_id ? 'opacity-80' : 'text-gray-400'}`}>
+                      {f.name}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

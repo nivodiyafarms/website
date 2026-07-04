@@ -108,21 +108,23 @@ def get_tasks_with_detail(
             wo_list.append({
                 "work_order_id":     str(wo.work_order_id),
                 "work_order_number": wo.work_order_number,
-                "short_description": wo.short_description,   # fix: was missing (edit opened blank)
-                "description":       wo.description,          # fix: was missing
+                "short_description": wo.short_description,
+                "description":       wo.description,
                 "status":            wo.status.value if wo.status else None,
+                "assigned_to":       str(wo.assigned_to) if wo.assigned_to else None,
                 "assigned_worker":   worker_name,
                 "wo_cost":           wo_cost,
-                "completion_note":   completion_note,         # latest note on this WO
+                "completion_note":   completion_note,
                 "resources": [
                     {
-                        "resource_id":   str(r.work_order_resources_id),
-                        "name":          r.name,
-                        "resource_type": r.resource_type.value if r.resource_type else None,
-                        "qty":           float(r.qty) if r.qty is not None else None,
-                        "unit":          r.unit,
-                        "rate":          float(r.rate) if r.rate is not None else None,
-                        "cost":          float(r.cost) if r.cost is not None else None,
+                        "resource_id":          str(r.work_order_resources_id),
+                        "name":                 r.name,
+                        "resource_type":        r.resource_type.value if r.resource_type else None,
+                        "resource_type_custom": r.resource_type_custom,
+                        "qty":                  float(r.qty) if r.qty is not None else None,
+                        "unit":                 r.unit,
+                        "rate":                 float(r.rate) if r.rate is not None else None,
+                        "cost":                 float(r.cost) if r.cost is not None else None,
                     }
                     for r in wo.resources
                 ],
@@ -133,12 +135,13 @@ def get_tasks_with_detail(
             "task_number":       task.task_number,
             "short_description": task.short_description,
             "description":       task.description,
-            "field_id":          task.field_id,              # fix: was missing (edit lost field)
+            "field_id":          task.field_id,
+            "task_fields":       [{"field_id": tf.field_id} for tf in task.task_fields],
             "category":          task.category.value if task.category else None,
             "subcategory":       task.subcategory.value if task.subcategory else None,
             "status":            task.status.value if task.status else None,
             "task_cost":         task_cost,
-            "severity":          cost_severity(task_cost),   # derived, never stored
+            "severity":          cost_severity(task_cost),
             "work_orders":       wo_list,
         })
 
@@ -233,6 +236,9 @@ def update_crop_cycle(
     
     update_data = crop_cycle_update.model_dump(exclude_unset=True)
 
+    # Extract junction rows before scalar loop (CropCycle has no 'fields' column)
+    fields_in = update_data.pop("fields", None)
+
     status_val = str(update_data.get("status", "") or "").lower()
     if status_val in ("resolved", "cancelled"):
         if not (update_data.get("resolution_comments") or "").strip():
@@ -259,10 +265,28 @@ def update_crop_cycle(
     if str(update_data.get("status", "")).lower() == "resolved":
         if not update_data.get("resolved_date"):
             update_data["resolved_date"] = date.today()
-    
+
     for key, value in update_data.items():
         setattr(db_crop_cycle, key, value)
-    
+
+    # Replace junction rows when fields provided
+    if fields_in is not None:
+        db.query(CropCycleField).filter(
+            CropCycleField.crop_cycle_id == db_crop_cycle.crop_cycle_id
+        ).delete(synchronize_session=False)
+        for f in fields_in:
+            db.add(CropCycleField(
+                crop_cycle_id=db_crop_cycle.crop_cycle_id,
+                field_id=f["field_id"],
+                allocated_acres=f.get("allocated_acres"),
+            ))
+        # Keep field_code (backwards compat) and cultivated_area in sync
+        if fields_in:
+            db_crop_cycle.field_code = fields_in[0]["field_id"]
+            total = sum((f.get("allocated_acres") or 0) for f in fields_in)
+            if total > 0:
+                db_crop_cycle.cultivated_area = total
+
     db.commit()
     db.refresh(db_crop_cycle)
     return db_crop_cycle

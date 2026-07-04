@@ -1,7 +1,7 @@
 # backend/app/schemas/task.py
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
 
@@ -21,7 +21,8 @@ class TaskCreate(BaseModel):
     description: Optional[str] = None
 
     assigned_to_id: Optional[UUID] = None  # defaults to current_user server-side
-    field_id: Optional[str] = None  # field within this cycle (task.field_id)
+    field_id: Optional[str] = None         # legacy single-field (kept for compat)
+    field_ids: Optional[List[str]] = None  # multi-field junction rows
     severity: Optional[SeverityLevel] = None
 
     model_config = {"from_attributes": True}
@@ -38,7 +39,8 @@ class TaskUpdate(BaseModel):
 
     # Assignment
     assigned_to_id: Optional[UUID] = None
-    field_id: Optional[str] = None  # field tag
+    field_id: Optional[str] = None         # legacy single-field
+    field_ids: Optional[List[str]] = None  # multi-field junction rows
     
     # Status and workflow
     status: Optional[TaskStatus] = None

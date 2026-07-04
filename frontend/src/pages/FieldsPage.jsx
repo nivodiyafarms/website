@@ -59,9 +59,12 @@ export default function FieldsPage() {
                   hover:bg-gray-50 active:bg-gray-100 transition-colors text-left"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 leading-snug">
-                    {f.name}
+                  <p className="text-sm font-bold font-mono text-gray-900 leading-snug">
+                    {f.field_id}
                   </p>
+                  {f.name && (
+                    <p className="text-xs text-gray-500 leading-snug">{f.name}</p>
+                  )}
                   <p className="text-xs text-gray-400 mt-0.5">
                     {S.acres(f.area_acre)}
                     {f.village ? ` · ${f.village}` : ''}

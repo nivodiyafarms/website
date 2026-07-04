@@ -13,18 +13,19 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
-import api, { cropCycleAPI, woActionsAPI } from '../services/api';
+import { ArrowLeft, ChevronDown, ChevronRight, Plus, Trash2, X } from 'lucide-react';
+import api, { cropCycleAPI, fieldAPI, woActionsAPI, workersAPI } from '../services/api';
 import { ProfitDisplay, formatMoney } from '../utils/money';
 import {
   SEASONS, CYCLE_DETAIL_STRINGS as S, SALE_CHANNELS, YIELD_LIST as YS,
   QUALITY_GRADES, TASK_STATUSES, TASK_STATUS_COLORS, WO_STATUSES, WO_STATUS_COLORS,
   RESOURCE_TYPES, PREP_RESOURCE_TYPES, TASKS_CRUD as TC,
-  TASK_CATEGORY_LABELS, TASK_SUBCATEGORIES, SEVERITY_BADGES,
+  TASK_CATEGORY_LABELS, TASK_SUBCATEGORIES, SEVERITY_BADGES, NEW_CYCLE as NC,
+  SEED_CLASS_OPTIONS, SEED_STAGE_OPTIONS,
 } from '../strings/hi';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function emptyResLine() { return { name: '', resource_type: 'labor', cost: '' }; }
+function emptyResLine() { return { name: '', resource_type: 'labor', resource_type_custom: '', cost: '' }; }
 
 // ── Simple breakdown row ────────────────────────────────────────────────────────
 function MoneyLine({ label, amount, className = '' }) {
@@ -51,15 +52,310 @@ function Section({ title, children }) {
   );
 }
 
+// ── CycleEditForm — edit crop cycle (crop, variety, dates, fields+acres) ──────
+function CycleEditForm({ cycleId, initial, initialCycleFields, onSave, onCancel }) {
+  const [allFields,      setAllFields]      = useState([]);
+  const [loadingData,    setLoadingData]    = useState(true);
+
+  const [crop,             setCrop]             = useState(initial.crop_name ?? '');
+  const [variety,          setVariety]          = useState(initial.seed_category ?? '');
+  const [seedClass,        setSeedClass]        = useState(initial.seed_class ?? '');
+  const [seedClassCustom,  setSeedClassCustom]  = useState(initial.seed_class_custom ?? '');
+  const [seedStage,        setSeedStage]        = useState(initial.seed_stage ?? '');
+  const [seedStageCustom,  setSeedStageCustom]  = useState(initial.seed_stage_custom ?? '');
+  const [sowDate,          setSowDate]          = useState(initial.sowing_date ?? '');
+  const [seedQty,          setSeedQty]          = useState(
+    initial.seed_quantity != null ? String(initial.seed_quantity) : ''
+  );
+  const [selectedFields, setSelectedFields] = useState(
+    initialCycleFields.map(f => ({
+      field_id:        f.field_id,
+      name:            f.field_id,
+      allocated_acres: f.allocated_acres != null ? String(f.allocated_acres) : '',
+    }))
+  );
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState('');
+
+  useEffect(() => {
+    fieldAPI.getAll()
+      .then(r => {
+        const aF = r.data || [];
+        setAllFields(aF);
+        // Enrich names from fields list
+        setSelectedFields(prev =>
+          prev.map(sf => {
+            const found = aF.find(f => f.field_id === sf.field_id);
+            return found ? { ...sf, name: found.name || sf.field_id } : sf;
+          })
+        );
+        setLoadingData(false);
+      })
+      .catch(() => setLoadingData(false));
+  }, []);
+
+  const availableFields = allFields.filter(
+    f => !selectedFields.find(s => s.field_id === f.field_id)
+  );
+  const addField    = (f) => setSelectedFields(prev => [
+    ...prev, { field_id: f.field_id, name: f.name || f.field_id, allocated_acres: '' }
+  ]);
+  const removeField = (id) => setSelectedFields(prev => prev.filter(f => f.field_id !== id));
+  const setAcres    = (id, val) => setSelectedFields(prev =>
+    prev.map(f => f.field_id === id ? { ...f, allocated_acres: val } : f)
+  );
+  const totalAcres = selectedFields.reduce((sum, f) => sum + (parseFloat(f.allocated_acres) || 0), 0);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!crop.trim())                  { setError(NC.errors.crop);    return; }
+    if (!sowDate)                      { setError(NC.errors.sowing);  return; }
+    if (selectedFields.length === 0)   { setError(NC.errors.noField); return; }
+    for (const f of selectedFields) {
+      if (!(parseFloat(f.allocated_acres) > 0)) { setError(NC.errors.acres); return; }
+    }
+    setSaving(true); setError('');
+    try {
+      await cropCycleAPI.updateCycle(cycleId, {
+        crop_name:         crop.trim(),
+        seed_category:     variety.trim() || null,
+        seed_class:        seedClass || null,
+        seed_class_custom: seedClass === 'other' ? (seedClassCustom.trim() || null) : null,
+        seed_stage:        seedStage || null,
+        seed_stage_custom: seedStage === 'other' ? (seedStageCustom.trim() || null) : null,
+        sowing_date:       sowDate,
+        seed_quantity:     seedQty ? parseFloat(seedQty) : null,
+        fields:            selectedFields.map(f => ({
+          field_id:        f.field_id,
+          allocated_acres: parseFloat(f.allocated_acres),
+        })),
+      });
+      onSave();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'कुछ गड़बड़ हो गई।');
+    } finally { setSaving(false); }
+  }
+
+  if (loadingData) {
+    return <p className="text-sm text-gray-400 py-4 text-center">लोड हो रहा है…</p>;
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Crop */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          {NC.cropLabel} <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text" value={crop}
+          onChange={e => setCrop(e.target.value)}
+          placeholder={NC.cropPlaceholder}
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
+                     focus:outline-none focus:ring-2 focus:ring-orange-400"
+          lang="hi"
+        />
+      </div>
+
+      {/* Variety */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          {NC.varietyLabel}
+        </label>
+        <input
+          type="text" value={variety}
+          onChange={e => setVariety(e.target.value)}
+          placeholder={NC.varietyPlaceholder}
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
+                     focus:outline-none focus:ring-2 focus:ring-orange-400"
+          translate="no" autoComplete="off" spellCheck={false}
+        />
+        <p className="text-xs text-gray-400 mt-1">{NC.varietyNote}</p>
+      </div>
+
+      {/* Seed class */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          {NC.seedClassLabel}
+        </label>
+        <select
+          value={seedClass}
+          onChange={e => { setSeedClass(e.target.value); setSeedClassCustom(''); }}
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
+                     focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
+        >
+          <option value="">— वैकल्पिक —</option>
+          {SEED_CLASS_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        {seedClass === 'other' && (
+          <input
+            type="text" value={seedClassCustom}
+            onChange={e => setSeedClassCustom(e.target.value)}
+            placeholder={NC.seedClassPlaceholder}
+            className="mt-2 w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
+                       focus:outline-none focus:ring-2 focus:ring-orange-400"
+            lang="hi"
+          />
+        )}
+      </div>
+
+      {/* Seed stage */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          {NC.seedStageLabel}
+        </label>
+        <select
+          value={seedStage}
+          onChange={e => { setSeedStage(e.target.value); setSeedStageCustom(''); }}
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
+                     focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
+        >
+          <option value="">— वैकल्पिक —</option>
+          {SEED_STAGE_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        {seedStage === 'other' && (
+          <input
+            type="text" value={seedStageCustom}
+            onChange={e => setSeedStageCustom(e.target.value)}
+            placeholder={NC.seedStagePlaceholder}
+            className="mt-2 w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
+                       focus:outline-none focus:ring-2 focus:ring-orange-400"
+            lang="hi"
+          />
+        )}
+      </div>
+
+      {/* Sowing date */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          {NC.sowingLabel} <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="date" value={sowDate}
+          onChange={e => setSowDate(e.target.value)}
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
+                     focus:outline-none focus:ring-2 focus:ring-orange-400"
+        />
+      </div>
+
+      {/* Seed quantity */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          {NC.seedQtyLabel}
+        </label>
+        <input
+          type="number" min="0" step="0.1" value={seedQty}
+          onChange={e => setSeedQty(e.target.value)}
+          placeholder={NC.seedQtyPlaceholder}
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900
+                     focus:outline-none focus:ring-2 focus:ring-orange-400"
+        />
+      </div>
+
+      {/* Fields + acres */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          {NC.fieldsLabel} <span className="text-red-500">*</span>
+        </label>
+
+        {selectedFields.length > 0 && (
+          <div className="space-y-2 mb-3">
+            {selectedFields.map(sf => (
+              <div key={sf.field_id}
+                   className="flex items-center gap-2 bg-orange-50 border border-orange-200
+                              rounded-xl px-3 py-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold font-mono text-gray-900">{sf.field_id}</p>
+                  {sf.name && sf.name !== sf.field_id && (
+                    <p className="text-xs text-gray-400 leading-tight">{sf.name}</p>
+                  )}
+                </div>
+                <input
+                  type="number" min="0.01" step="0.01" value={sf.allocated_acres}
+                  onChange={e => setAcres(sf.field_id, e.target.value)}
+                  placeholder={NC.fieldAcresPlaceholder}
+                  className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm
+                             text-right focus:outline-none focus:ring-1 focus:ring-orange-400"
+                />
+                <span className="text-xs text-gray-400 shrink-0">एकड़</span>
+                <button type="button" onClick={() => removeField(sf.field_id)}
+                        className="text-gray-400 hover:text-red-500 shrink-0">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            {totalAcres > 0 && (
+              <p className="text-xs font-semibold text-orange-700 text-right">
+                {NC.totalAcres(totalAcres.toFixed(2))}
+              </p>
+            )}
+          </div>
+        )}
+
+        {availableFields.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {availableFields.map(f => (
+              <button key={f.field_id} type="button" onClick={() => addField(f)}
+                      className="px-3 py-1.5 rounded-xl text-sm border border-gray-300
+                                 bg-white hover:border-orange-400 hover:bg-orange-50
+                                 transition text-left">
+                <span className="font-bold font-mono text-gray-800">+ {f.field_id}</span>
+                {f.name && f.name !== f.field_id && (
+                  <span className="block text-[10px] text-gray-400 leading-tight">{f.name}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        ) : selectedFields.length > 0 ? (
+          <p className="text-xs text-gray-400">सभी खेत जोड़े गए</p>
+        ) : (
+          <p className="text-xs text-gray-400">कोई खेत नहीं मिला</p>
+        )}
+      </div>
+
+      {error && (
+        <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-xl px-4 py-2">
+          {error}
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          type="submit" disabled={saving}
+          className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-50
+                     text-white font-bold rounded-2xl py-3 text-sm transition"
+        >
+          {saving ? S.savingCycle : S.saveCycle}
+        </button>
+        <button
+          type="button" onClick={onCancel}
+          className="px-4 text-sm text-gray-500 hover:text-gray-700 border border-gray-300
+                     rounded-2xl py-2 bg-white transition"
+        >
+          {TC.cancelForm}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── TaskForm — create or edit a task ──────────────────────────────────────────
-function TaskForm({ cycleId, cycleFields = [], initial = null, onSave, onCancel }) {
+function TaskForm({ cycleId, cycleFields = [], fieldNameMap = {}, initial = null, onSave, onCancel }) {
   const isEdit = Boolean(initial);
 
   const [tipanni,     setTipanni]     = useState(initial?.short_description ?? '');
   const [varnan,      setVarnan]      = useState(initial?.description ?? '');
-  const [fieldId,     setFieldId]     = useState(
-    initial?.field_id ?? (cycleFields[0]?.field_id ?? '')
-  );
+  // Multi-select field IDs — seed from task_fields (new) or field_id (legacy)
+  const [fieldIds,    setFieldIds]    = useState(() => {
+    if (initial?.task_fields?.length) return initial.task_fields.map(tf => tf.field_id);
+    if (initial?.field_id)            return [initial.field_id];
+    if (cycleFields.length > 0)       return [cycleFields[0].field_id]; // default first on create
+    return [];
+  });
   const [category,    setCategory]    = useState(initial?.category ?? '');
   const [subcategory, setSubcategory] = useState(initial?.subcategory ?? '');
   const [saving,      setSaving]      = useState(false);
@@ -67,22 +363,28 @@ function TaskForm({ cycleId, cycleFields = [], initial = null, onSave, onCancel 
 
   const subcatOptions = TASK_SUBCATEGORIES[category] ?? [];
 
+  function toggleField(fid) {
+    setFieldIds(prev =>
+      prev.includes(fid) ? prev.filter(id => id !== fid) : [...prev, fid]
+    );
+  }
+
   function handleCategoryChange(val) {
     setCategory(val);
-    setSubcategory('');  // reset subcategory when category changes
+    setSubcategory('');
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!tipanni.trim())  { setError(TC.errors.tipanni);  return; }
-    if (!fieldId)         { setError(TC.errors.field);    return; }
-    if (!category)        { setError(TC.errors.category); return; }
+    if (!tipanni.trim())      { setError(TC.errors.tipanni);  return; }
+    if (fieldIds.length === 0){ setError(TC.errors.field);    return; }
+    if (!category)            { setError(TC.errors.category); return; }
     setSaving(true); setError('');
     try {
       const payload = {
         short_description: tipanni.trim(),
         description:       varnan.trim() || null,
-        field_id:          fieldId,
+        field_ids:         fieldIds,
         category,
         subcategory:       subcategory || null,
       };
@@ -171,35 +473,38 @@ function TaskForm({ cycleId, cycleFields = [], initial = null, onSave, onCancel 
         />
       </div>
 
-      {/* field picker */}
+      {/* field multi-picker — toggle chips, one or more */}
       <div>
         <label className="block text-xs font-semibold text-gray-600 mb-1">
           {TC.fieldLabel} <span className="text-red-500">*</span>
         </label>
         {cycleFields.length === 0 ? (
           <p className="text-xs text-gray-400">{TC.fieldNone}</p>
-        ) : cycleFields.length === 1 ? (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-mono text-gray-700">{cycleFields[0].field_id}</span>
-            {cycleFields[0].allocated_acres && (
-              <span className="text-xs text-gray-400">{cycleFields[0].allocated_acres} एकड़</span>
-            )}
-          </div>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {cycleFields.map(f => (
-              <button
-                key={f.field_id} type="button"
-                onClick={() => setFieldId(f.field_id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition
-                  ${fieldId === f.field_id
-                    ? 'bg-orange-500 text-white border-orange-500'
-                    : 'bg-white text-gray-700 border-gray-200 hover:border-orange-400'}`}
-              >
-                {f.field_id}
-                {f.allocated_acres ? ` · ${f.allocated_acres} एकड़` : ''}
-              </button>
-            ))}
+            {cycleFields.map(f => {
+              const selected = fieldIds.includes(f.field_id);
+              return (
+                <button
+                  key={f.field_id} type="button"
+                  onClick={() => toggleField(f.field_id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs border transition text-left
+                    ${selected
+                      ? 'bg-orange-500 text-white border-orange-500'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-orange-400'}`}
+                >
+                  <span className="font-bold font-mono">
+                    {selected ? '✓ ' : ''}{f.field_id}
+                  </span>
+                  {f.allocated_acres ? <span className="opacity-75"> · {f.allocated_acres}एकड़</span> : ''}
+                  {fieldNameMap[f.field_id] && fieldNameMap[f.field_id] !== f.field_id && (
+                    <span className={`block text-[10px] leading-tight mt-0.5 ${selected ? 'opacity-80' : 'text-gray-400'}`}>
+                      {fieldNameMap[f.field_id]}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -229,11 +534,12 @@ function TaskForm({ cycleId, cycleFields = [], initial = null, onSave, onCancel 
 }
 
 // ── WOForm — create (with simpler cost) or edit (description only) ────────────
-function WOForm({ taskId, initial = null, onSave, onCancel }) {
+function WOForm({ taskId, initial = null, workers = [], onSave, onCancel }) {
   const isEdit = Boolean(initial);
 
   const [tipanni,    setTipanni]    = useState(initial?.short_description ?? '');
   const [varnan,     setVarnan]     = useState(initial?.description ?? '');
+  const [assignedTo, setAssignedTo] = useState(initial?.assigned_to ?? '');
   // Cost mode: simple = one ₹ total; detail = resource line breakdown
   const [showDetail, setShowDetail] = useState(false);
   const [simpleCost, setSimpleCost] = useState('');
@@ -280,9 +586,10 @@ function WOForm({ taskId, initial = null, onSave, onCancel }) {
           if (!(parseFloat(r.cost) > 0)) { setError(TC.woErrors.resCost); return; }
         }
         resToPost = resources.map(r => ({
-          name:          r.name.trim(),
-          resource_type: r.resource_type,
-          cost:          parseFloat(r.cost),
+          name:                 r.name.trim(),
+          resource_type:        r.resource_type,
+          resource_type_custom: r.resource_type === 'other' ? (r.resource_type_custom?.trim() || null) : null,
+          cost:                 parseFloat(r.cost),
         }));
       }
 
@@ -296,18 +603,26 @@ function WOForm({ taskId, initial = null, onSave, onCancel }) {
         for (const r of resToPost) {
           await cropCycleAPI.createWorkOrderResource(woId, r);
         }
+        if (assignedTo) {
+          await woActionsAPI.assign(woId, assignedTo);
+        }
         onSave();
       } catch (err) {
         setError(err.response?.data?.detail || 'कुछ गड़बड़ हो गई।');
       } finally { setSaving(false); }
     } else {
-      // Edit: only patch description fields (resources managed inline)
+      // Edit: patch description fields + re-assign worker if changed
       setSaving(true); setError('');
       try {
         await cropCycleAPI.updateWorkOrder(taskId, initial.work_order_id, {
           short_description: tipanni.trim(),
           description:       varnan.trim() || null,
         });
+        if (assignedTo !== (initial.assigned_to ?? '')) {
+          if (assignedTo) {
+            await woActionsAPI.assign(initial.work_order_id, assignedTo);
+          }
+        }
         onSave();
       } catch (err) {
         setError(err.response?.data?.detail || 'कुछ गड़बड़ हो गई।');
@@ -350,6 +665,26 @@ function WOForm({ taskId, initial = null, onSave, onCancel }) {
           lang="hi"
         />
       </div>
+
+      {/* Worker assignment */}
+      {workers.length > 0 && (
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">
+            {TC.workerLabel}
+          </label>
+          <select
+            value={assignedTo}
+            onChange={e => setAssignedTo(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm
+                       focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+          >
+            <option value="">{TC.workerNone}</option>
+            {workers.filter(w => w.active).map(w => (
+              <option key={w.worker_id} value={w.worker_id}>{w.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Cost section — only on create */}
       {!isEdit && (
@@ -402,6 +737,18 @@ function WOForm({ taskId, initial = null, onSave, onCancel }) {
                         </button>
                       ))}
                     </div>
+                    {/* अन्य custom text when resource_type=other */}
+                    {res.resource_type === 'other' && (
+                      <input
+                        type="text"
+                        value={res.resource_type_custom || ''}
+                        onChange={e => updateRes(idx, 'resource_type_custom', e.target.value)}
+                        placeholder="क्या खर्च? (जैसे: पानी का टैंकर)"
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs
+                                   focus:outline-none focus:ring-1 focus:ring-green-400 bg-orange-50"
+                        lang="hi"
+                      />
+                    )}
                     <div className="flex gap-2 items-start">
                       <div className="flex-1 space-y-1.5">
                         <input
@@ -552,6 +899,15 @@ export default function CycleDetailPage() {
   const [sendBackReason, setSendBackReason] = useState('');
   const [sendBackLoading, setSendBackLoading] = useState(false);
 
+  // ── Cycle edit ───────────────────────────────────────────────────────────────
+  const [editingCycle,    setEditingCycle]    = useState(false);
+
+  // ── Workers (for WO assignment) ───────────────────────────────────────────
+  const [workers, setWorkers] = useState([]);
+
+  // ── Field name map: {field_id → name} for ID-primary display ──────────────
+  const [fieldNameMap, setFieldNameMap] = useState({});
+
   // ── Sales delete state ───────────────────────────────────────────────────────
   const [deletingId,      setDeletingId]      = useState(null);
   const [deleteLoading,   setDeleteLoading]   = useState(false);
@@ -579,6 +935,14 @@ export default function CycleDetailPage() {
   }, [crop_cycle_id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    workersAPI.list().then(r => setWorkers(r.data || [])).catch(() => {});
+    fieldAPI.getAll().then(r => {
+      const map = {};
+      (r.data || []).forEach(f => { map[f.field_id] = f.name || f.field_id; });
+      setFieldNameMap(map);
+    }).catch(() => {});
+  }, []);
 
   // ── Task handlers ─────────────────────────────────────────────────────────────
   async function handleDeleteTask(taskId) {
@@ -611,9 +975,11 @@ export default function CycleDetailPage() {
     setNewResSaving(true); setNewResError('');
     try {
       await cropCycleAPI.createWorkOrderResource(woId, {
-        name:          newResLine.name.trim(),
-        resource_type: newResLine.resource_type,
-        cost:          parseFloat(newResLine.cost),
+        name:                 newResLine.name.trim(),
+        resource_type:        newResLine.resource_type,
+        resource_type_custom: newResLine.resource_type === 'other'
+          ? (newResLine.resource_type_custom?.trim() || null) : null,
+        cost:                 parseFloat(newResLine.cost),
       });
       setAddingResWoId(null);
       setNewResLine(emptyResLine());
@@ -778,13 +1144,35 @@ export default function CycleDetailPage() {
         {seasonLabel} › {crop_name}
       </button>
 
-      {/* Page title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 leading-tight">{crop_name}</h1>
-        {seed_cat && (
-          <p className="text-sm text-gray-400 mt-0.5 font-mono">{seed_cat} · {seasonLabel}</p>
-        )}
-      </div>
+      {/* Page title + cycle edit */}
+      {editingCycle ? (
+        <div className="mb-6 rounded-2xl bg-white border border-orange-200 shadow-sm px-6 py-5">
+          <h2 className="text-base font-bold text-gray-900 mb-4">{S.editCycleTitle}</h2>
+          <CycleEditForm
+            cycleId={crop_cycle_id}
+            initial={detail}
+            initialCycleFields={cycleFields}
+            onSave={() => { setEditingCycle(false); fetchAll(); }}
+            onCancel={() => setEditingCycle(false)}
+          />
+        </div>
+      ) : (
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">{crop_name}</h1>
+            {seed_cat && (
+              <p className="text-sm text-gray-400 mt-0.5 font-mono">{seed_cat} · {seasonLabel}</p>
+            )}
+          </div>
+          <button
+            onClick={() => setEditingCycle(true)}
+            className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded
+                       hover:bg-blue-50 border border-blue-200 transition-colors flex-shrink-0 mt-1"
+          >
+            {S.editCycle}
+          </button>
+        </div>
+      )}
 
       {/* ── P&L HERO ─────────────────────────────────────────────────────────── */}
       <div className="rounded-2xl bg-white border border-gray-200 shadow-sm px-6 py-5 mb-6">
@@ -822,15 +1210,33 @@ export default function CycleDetailPage() {
 
       {/* ── FIELDS ───────────────────────────────────────────────────────────── */}
       <Section title={S.fieldsHeading}>
-        {fieldCode ? (
-          <div className="flex justify-between items-center py-3">
-            <span className="text-sm font-mono text-gray-700">{fieldCode}</span>
-            {area != null && area > 0 && (
-              <span className="text-sm text-gray-500">{S.acres(area)}</span>
-            )}
-          </div>
-        ) : (
+        {cycleFields.length === 0 ? (
           <p className="text-sm text-gray-400 py-3">—</p>
+        ) : (
+          <>
+            {cycleFields.map(f => (
+              <div key={f.field_id} className="flex justify-between items-center py-2.5">
+                <div>
+                  <p className="text-sm font-bold font-mono text-gray-900">{f.field_id}</p>
+                  {fieldNameMap[f.field_id] && fieldNameMap[f.field_id] !== f.field_id && (
+                    <p className="text-xs text-gray-400">{fieldNameMap[f.field_id]}</p>
+                  )}
+                </div>
+                {f.allocated_acres != null && Number(f.allocated_acres) > 0 && (
+                  <span className="text-sm text-gray-500">{S.acres(Number(f.allocated_acres))}</span>
+                )}
+              </div>
+            ))}
+            {cycleFields.length > 1 && (() => {
+              const tot = cycleFields.reduce((s, f) => s + (Number(f.allocated_acres) || 0), 0);
+              return tot > 0 ? (
+                <div className="flex justify-between items-center py-2 border-t border-gray-100">
+                  <span className="text-xs font-semibold text-gray-500">कुल</span>
+                  <span className="text-xs font-semibold text-gray-700">{S.acres(tot)}</span>
+                </div>
+              ) : null;
+            })()}
+          </>
         )}
       </Section>
 
@@ -863,6 +1269,7 @@ export default function CycleDetailPage() {
                         <TaskForm
                           cycleId={crop_cycle_id}
                           cycleFields={cycleFields}
+                          fieldNameMap={fieldNameMap}
                           initial={editingTask}
                           onSave={() => { setEditingTask(null); fetchAll(); }}
                           onCancel={() => setEditingTask(null)}
@@ -884,6 +1291,16 @@ export default function CycleDetailPage() {
                             <span className="text-xs font-mono text-gray-400 flex-shrink-0">
                               {task.task_number}
                             </span>
+                            {/* field chips — compact, ID bold + name tooltip via title */}
+                            {task.task_fields?.map(tf => (
+                              <span key={tf.field_id}
+                                    title={fieldNameMap[tf.field_id] || tf.field_id}
+                                    className="text-xs font-bold font-mono bg-orange-50
+                                               text-orange-600 border border-orange-200
+                                               px-1.5 py-0.5 rounded flex-shrink-0">
+                                {tf.field_id}
+                              </span>
+                            ))}
                             <span className="text-sm font-medium text-gray-800 truncate">
                               {task.short_description}
                             </span>
@@ -1024,6 +1441,7 @@ export default function CycleDetailPage() {
                                     <WOForm
                                       taskId={editingWO.taskId}
                                       initial={wo}
+                                      workers={workers}
                                       onSave={() => { setEditingWO(null); fetchAll(); }}
                                       onCancel={() => setEditingWO(null)}
                                     />
@@ -1184,7 +1602,9 @@ export default function CycleDetailPage() {
                                     ) : (
                                       <div className="divide-y divide-gray-100">
                                         {wo.resources.map((r) => {
-                                          const rType = RESOURCE_TYPES[r.resource_type] ?? r.resource_type ?? '—';
+                                          const rType = r.resource_type === 'other' && r.resource_type_custom
+                                            ? r.resource_type_custom
+                                            : (RESOURCE_TYPES[r.resource_type] ?? r.resource_type ?? '—');
                                           const { formatted: rCostFmt } = formatMoney(r.cost ?? 0);
                                           const isDeletingThisRes =
                                             deletingRes?.woId === wo.work_order_id &&
@@ -1255,7 +1675,7 @@ export default function CycleDetailPage() {
                                           {PREP_RESOURCE_TYPES.map(rt => (
                                             <button
                                               key={rt.value} type="button"
-                                              onClick={() => setNewResLine(p => ({...p, resource_type: rt.value}))}
+                                              onClick={() => setNewResLine(p => ({...p, resource_type: rt.value, resource_type_custom: ''}))}
                                               className={`px-2.5 py-1 rounded-full text-xs font-medium border transition
                                                 ${newResLine.resource_type === rt.value
                                                   ? 'bg-green-600 text-white border-green-600'
@@ -1265,6 +1685,17 @@ export default function CycleDetailPage() {
                                             </button>
                                           ))}
                                         </div>
+                                        {newResLine.resource_type === 'other' && (
+                                          <input
+                                            type="text"
+                                            value={newResLine.resource_type_custom || ''}
+                                            onChange={e => setNewResLine(p => ({...p, resource_type_custom: e.target.value}))}
+                                            placeholder="क्या खर्च? (जैसे: पानी का टैंकर)"
+                                            className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs
+                                                       focus:outline-none focus:ring-1 focus:ring-green-400 bg-orange-50"
+                                            lang="hi"
+                                          />
+                                        )}
                                         <input
                                           type="text"
                                           value={newResLine.name}
@@ -1397,6 +1828,7 @@ export default function CycleDetailPage() {
                           <div className="px-10 py-3 border-t border-gray-100">
                             <WOForm
                               taskId={task.task_id}
+                              workers={workers}
                               onSave={() => {
                                 setAddingWoTaskId(null);
                                 fetchAll();
@@ -1431,6 +1863,7 @@ export default function CycleDetailPage() {
               <TaskForm
                 cycleId={crop_cycle_id}
                 cycleFields={cycleFields}
+                fieldNameMap={fieldNameMap}
                 onSave={() => { setShowAddTask(false); fetchAll(); }}
                 onCancel={() => setShowAddTask(false)}
               />

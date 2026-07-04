@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
-from datetime import datetime
+from datetime import date
 from uuid import UUID
 
 from app.database import get_db
-from app.models.general_expense import GeneralExpense
+from app.models.general_expense import GeneralExpense, ExpenseReviewStatus
 from app.models.user import User
 from app.schemas.general_expense import (
     GeneralExpenseCreate,
@@ -17,215 +18,162 @@ from app.auth.security import get_current_user
 router = APIRouter(prefix="/api/general-expenses", tags=["general-expenses"])
 
 
-# -----------------------------------------------------
-# Helper: Map frontend payload to DB structure
-# -----------------------------------------------------
-def _map_frontend_to_db(data: GeneralExpenseCreate) -> dict:
-    expense_dict = {}
-
-    expense_dict["category"] = data.resource_type or data.category
-    expense_dict["subcategory"] = (
-        data.resource_code or data.expense_code or data.subcategory
+def _to_response(e: GeneralExpense) -> GeneralExpenseResponse:
+    return GeneralExpenseResponse(
+        general_expense_id=e.general_expense_id,
+        expense_no=e.expense_no,
+        category=e.category,
+        subcategory=e.subcategory,
+        description=e.description,
+        date=e.date,
+        qty=float(e.qty) if e.qty is not None else None,
+        unit=e.unit,
+        unit_rate=float(e.unit_rate) if e.unit_rate is not None else None,
+        total_cost=float(e.total_cost) if e.total_cost is not None else None,
+        review_status=e.review_status.value if e.review_status else "unreviewed",
+        void_reason=e.void_reason,
+        created_by=e.created_by,
+        created_at=e.created_at,
     )
 
-    expense_dict["qty"] = data.quantity or data.qty
-    expense_dict["unit_rate"] = data.rate or data.unit_rate
-    expense_dict["total_cost"] = data.total_amount or data.total_cost
-    expense_dict["date"] = data.expense_date or data.date
-    expense_dict["unit"] = data.unit
 
-    # Build description
-    description_parts = []
-    if data.notes:
-        description_parts.append(f"Notes: {data.notes}")
-    if data.vendor_name:
-        description_parts.append(f"Vendor: {data.vendor_name}")
-    if data.invoice_no:
-        description_parts.append(f"Invoice: {data.invoice_no}")
-
-    expense_dict["description"] = (
-        " | ".join(description_parts) if description_parts else data.description
-    )
-
-    expense_dict["related_type"] = data.related_type
-    expense_dict["related_id"] = data.related_id
-
-    # TEMP: until auth fully integrated
-    expense_dict["created_by"] = None
-
-    return expense_dict
+def _next_expense_no(db: Session) -> str:
+    max_no = db.execute(
+        __import__('sqlalchemy').text(
+            "SELECT MAX(expense_no) FROM general_expense WHERE expense_no ~ '^GE[0-9]+$'"
+        )
+    ).scalar()
+    if max_no:
+        n = int(max_no[2:]) + 1
+    else:
+        n = 1
+    return f"GE{n:04d}"
 
 
-# -----------------------------------------------------
-# GET ALL
-# -----------------------------------------------------
 @router.get("/", response_model=List[GeneralExpenseResponse])
 def get_general_expenses(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        expenses = (
-            db.query(GeneralExpense)
-            .order_by(GeneralExpense.created_at.desc())
-            .all()
-        )
-
-        return [
-            GeneralExpenseResponse(
-                general_expense_id=e.general_expense_id,
-                category=e.category,
-                subcategory=e.subcategory,
-                description=e.description,
-                date=e.date,
-                qty=float(e.qty) if e.qty is not None else None,
-                unit=e.unit,
-                unit_rate=float(e.unit_rate) if e.unit_rate is not None else None,
-                total_cost=float(e.total_cost) if e.total_cost is not None else None,
-                related_type=e.related_type,
-                related_id=e.related_id,
-                created_by=e.created_by,
-                created_at=e.created_at,
-            )
-            for e in expenses
-        ]
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching expenses: {str(e)}",
-        )
+    expenses = (
+        db.query(GeneralExpense)
+        .order_by(GeneralExpense.created_at.desc())
+        .all()
+    )
+    return [_to_response(e) for e in expenses]
 
 
-# -----------------------------------------------------
-# GET ONE
-# -----------------------------------------------------
 @router.get("/{expense_id}", response_model=GeneralExpenseResponse)
 def get_general_expense(
     expense_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    expense = (
-        db.query(GeneralExpense)
-        .filter(GeneralExpense.general_expense_id == expense_id)
-        .first()
-    )
-
-    if not expense:
+    e = db.query(GeneralExpense).filter(GeneralExpense.general_expense_id == expense_id).first()
+    if not e:
         raise HTTPException(status_code=404, detail="General expense not found")
-
-    return GeneralExpenseResponse(
-        general_expense_id=expense.general_expense_id,
-        category=expense.category,
-        subcategory=expense.subcategory,
-        description=expense.description,
-        date=expense.date,
-        qty=float(expense.qty) if expense.qty is not None else None,
-        unit=expense.unit,
-        unit_rate=float(expense.unit_rate) if expense.unit_rate is not None else None,
-        total_cost=float(expense.total_cost) if expense.total_cost is not None else None,
-        related_type=expense.related_type,
-        related_id=expense.related_id,
-        created_by=expense.created_by,
-        created_at=expense.created_at,
-    )
+    return _to_response(e)
 
 
-# -----------------------------------------------------
-# CREATE
-# -----------------------------------------------------
 @router.post("/", response_model=GeneralExpenseResponse, status_code=201)
 def create_general_expense(
-    expense: GeneralExpenseCreate,
+    payload: GeneralExpenseCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    expense_dict = _map_frontend_to_db(expense)
+    if not payload.total_cost or payload.total_cost <= 0:
+        raise HTTPException(status_code=400, detail="राशि 0 से ज़्यादा होनी चाहिए")
 
-    db_expense = GeneralExpense(**expense_dict)
-    db.add(db_expense)
-    db.commit()
-    db.refresh(db_expense)
-
-    return GeneralExpenseResponse(
-        general_expense_id=db_expense.general_expense_id,
-        category=db_expense.category,
-        subcategory=db_expense.subcategory,
-        description=db_expense.description,
-        date=db_expense.date,
-        qty=float(db_expense.qty) if db_expense.qty is not None else None,
-        unit=db_expense.unit,
-        unit_rate=float(db_expense.unit_rate) if db_expense.unit_rate is not None else None,
-        total_cost=float(db_expense.total_cost) if db_expense.total_cost is not None else None,
-        related_type=db_expense.related_type,
-        related_id=db_expense.related_id,
-        created_by=db_expense.created_by,
-        created_at=db_expense.created_at,
+    e = GeneralExpense(
+        expense_no=_next_expense_no(db),
+        category=payload.category,
+        subcategory=payload.subcategory,
+        description=payload.description,
+        date=payload.date or date.today(),
+        qty=payload.qty,
+        unit=payload.unit,
+        unit_rate=payload.unit_rate,
+        total_cost=payload.total_cost,
+        review_status=ExpenseReviewStatus.UNREVIEWED,
+        created_by=None,  # TODO(auth-slice-6): set from current_user
     )
+    db.add(e)
+    db.commit()
+    db.refresh(e)
+    return _to_response(e)
 
 
-# -----------------------------------------------------
-# UPDATE
-# -----------------------------------------------------
 @router.put("/{expense_id}", response_model=GeneralExpenseResponse)
 def update_general_expense(
     expense_id: UUID,
-    expense_update: GeneralExpenseUpdate,
+    payload: GeneralExpenseUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    db_expense = (
-        db.query(GeneralExpense)
-        .filter(GeneralExpense.general_expense_id == expense_id)
-        .first()
-    )
-
-    if not db_expense:
+    e = db.query(GeneralExpense).filter(GeneralExpense.general_expense_id == expense_id).first()
+    if not e:
         raise HTTPException(status_code=404, detail="General expense not found")
 
-    update_dict = expense_update.model_dump(exclude_unset=True)
+    update_data = payload.model_dump(exclude_unset=True)
+    if "total_cost" in update_data and (update_data["total_cost"] is None or update_data["total_cost"] <= 0):
+        raise HTTPException(status_code=400, detail="राशि 0 से ज़्यादा होनी चाहिए")
 
-    for key, value in update_dict.items():
-        setattr(db_expense, key, value)
+    for key, value in update_data.items():
+        setattr(e, key, value)
 
     db.commit()
-    db.refresh(db_expense)
-
-    return GeneralExpenseResponse(
-        general_expense_id=db_expense.general_expense_id,
-        category=db_expense.category,
-        subcategory=db_expense.subcategory,
-        description=db_expense.description,
-        date=db_expense.date,
-        qty=float(db_expense.qty) if db_expense.qty is not None else None,
-        unit=db_expense.unit,
-        unit_rate=float(db_expense.unit_rate) if db_expense.unit_rate is not None else None,
-        total_cost=float(db_expense.total_cost) if db_expense.total_cost is not None else None,
-        related_type=db_expense.related_type,
-        related_id=db_expense.related_id,
-        created_by=db_expense.created_by,
-        created_at=db_expense.created_at,
-    )
+    db.refresh(e)
+    return _to_response(e)
 
 
-# -----------------------------------------------------
-# DELETE
-# -----------------------------------------------------
+@router.patch("/{expense_id}/verify", response_model=GeneralExpenseResponse)
+def verify_expense(
+    expense_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    e = db.query(GeneralExpense).filter(GeneralExpense.general_expense_id == expense_id).first()
+    if not e:
+        raise HTTPException(status_code=404, detail="General expense not found")
+    if e.review_status == ExpenseReviewStatus.VOID:
+        raise HTTPException(status_code=400, detail="रद्द किया गया खर्च सत्यापित नहीं हो सकता")
+
+    e.review_status = ExpenseReviewStatus.VERIFIED
+    # TODO(auth-slice-6): e.reviewed_by = current_user.worker_id (once users↔workers linked)
+    db.commit()
+    db.refresh(e)
+    return _to_response(e)
+
+
+@router.patch("/{expense_id}/void", response_model=GeneralExpenseResponse)
+def void_expense(
+    expense_id: UUID,
+    reason: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not reason or not reason.strip():
+        raise HTTPException(status_code=400, detail="रद्द करने का कारण बताओ")
+
+    e = db.query(GeneralExpense).filter(GeneralExpense.general_expense_id == expense_id).first()
+    if not e:
+        raise HTTPException(status_code=404, detail="General expense not found")
+
+    e.review_status = ExpenseReviewStatus.VOID
+    e.void_reason = reason.strip()
+    db.commit()
+    db.refresh(e)
+    return _to_response(e)
+
+
 @router.delete("/{expense_id}", status_code=204)
 def delete_general_expense(
     expense_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    db_expense = (
-        db.query(GeneralExpense)
-        .filter(GeneralExpense.general_expense_id == expense_id)
-        .first()
-    )
-
-    if not db_expense:
+    e = db.query(GeneralExpense).filter(GeneralExpense.general_expense_id == expense_id).first()
+    if not e:
         raise HTTPException(status_code=404, detail="General expense not found")
-
-    db.delete(db_expense)
+    db.delete(e)
     db.commit()

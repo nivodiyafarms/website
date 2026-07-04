@@ -33,6 +33,9 @@ class GeneralExpense(Base):
         default=uuid.uuid4
     )
 
+    # Human-readable ID (GE0001, GE0002, …)
+    expense_no = Column(Text, nullable=True, unique=True)
+
     # Classification
     category = Column(Text, nullable=True)
     subcategory = Column(Text, nullable=True)

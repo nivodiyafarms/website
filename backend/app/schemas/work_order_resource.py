@@ -10,7 +10,8 @@ from datetime import datetime
 # Create Resource (WO-scoped)
 # -----------------------------
 class WorkOrderResourceCreate(BaseModel):
-    resource_type: str          # enum from DB (LABOR, FUEL, etc.)
+    resource_type: str          # enum from DB (labor, fuel, etc.)
+    resource_type_custom: Optional[str] = None  # free text when resource_type='other'
     name: str                   # display name
     qty: Optional[float] = None
     unit: Optional[str] = None
@@ -26,6 +27,7 @@ class WorkOrderResourceCreate(BaseModel):
 # -----------------------------
 class WorkOrderResourceUpdate(BaseModel):
     resource_type: Optional[str] = None
+    resource_type_custom: Optional[str] = None
     name: Optional[str] = None
     qty: Optional[float] = None
     unit: Optional[str] = None
@@ -44,6 +46,7 @@ class WorkOrderResourceResponse(BaseModel):
     work_order_id: UUID
 
     resource_type: str
+    resource_type_custom: Optional[str] = None
     name: str
     qty: Optional[float]
     unit: Optional[str]

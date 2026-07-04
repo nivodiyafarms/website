@@ -66,6 +66,7 @@ def add_resource(
     res = WorkOrderResource(
         work_order_id=wo.work_order_id,
         resource_type=payload.resource_type,
+        resource_type_custom=payload.resource_type_custom,
         name=payload.name,
         qty=payload.qty,
         unit=payload.unit,

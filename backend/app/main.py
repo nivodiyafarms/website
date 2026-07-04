@@ -46,6 +46,7 @@ from app.models.worker import Worker
 from app.models.sale import Sale
 from app.models.yield_record import YieldRecord
 from app.models.prep_cost_allocation import PrepCostAllocation
+from app.models.task_field import TaskField
 
 # ---------------------------
 # APP INIT
