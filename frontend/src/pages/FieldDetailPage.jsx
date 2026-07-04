@@ -186,6 +186,15 @@ export default function FieldDetailPage() {
                           <div className="flex gap-2">
                             <button
                               onClick={() => navigate(
+                                `/fields/${field_id}/prep/${wo.work_order_id}/allocate`,
+                                { state: { prepWO: wo } }
+                              )}
+                              className="text-xs text-orange-600 hover:text-orange-800 font-semibold"
+                            >
+                              {PS.allocBtn}
+                            </button>
+                            <button
+                              onClick={() => navigate(
                                 `/fields/${field_id}/prep/${wo.work_order_id}/edit`,
                                 { state: { prepWO: wo } }
                               )}

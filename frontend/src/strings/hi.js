@@ -508,9 +508,38 @@ export const FIELD_DETAIL_PREP = {
   addBtn:         '+ खेत की तैयारी का काम जोड़ो',
   editBtn:        'बदलो',
   deleteBtn:      'हटाओ',
+  allocBtn:       'फसलों में बाँटो',
   deleteConfirm:  'यह काम हटाना है?',
   deleteYes:      'हाँ, हटाओ',
   deleteNo:       'रहने दो',
+};
+
+// ── Prep cost allocation screen ───────────────────────────────────────────────
+export const PREP_ALLOC = {
+  back:              'खेत पर वापस',
+  heading:           'फसलों में बाँटो',
+  subLabel:          (woNo) => `${woNo} — खेत की तैयारी का खर्चा`,
+  woCost:            'कुल खर्चा',
+  remaining:         'बाकी',
+  remainingZero:     'पूरा बाँट दिया',
+  overAlloc:         (n) => `₹${n} ज़्यादा हो गया — राशि घटाओ`,
+  // existing allocations section
+  existingHeading:   'दर्ज किए गए',
+  removeBtn:         'हटाओ',
+  removing:          'हट रहा है…',
+  // new allocation section
+  availHeading:      (season, year) => `${season} ${year} की फसलें`,
+  amountLabel:       'राशि (₹)',
+  amountPlaceholder: 'जैसे: 1500',
+  saveBtn:           'दर्ज करो',
+  saving:            'दर्ज हो रहा है…',
+  perCycleMax:       (n) => `अधिकतम ₹${n}`,
+  noCycles:          (season, year) => `${season} ${year} में कोई फसल नहीं`,
+  allAllocated:      'सभी फसलों में डाल दिया',
+  errors: {
+    amount:  'राशि 0 से ज़्यादा होनी चाहिए',
+    overMax: (n) => `अधिकतम ₹${n} बाँट सकते हो`,
+  },
 };
 
 // ── New cycle form ────────────────────────────────────────────────────────────

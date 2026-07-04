@@ -167,6 +167,17 @@ export const generalExpenseAPI = {
 };
 
 /* ======================
+   PREP COST ALLOCATIONS
+====================== */
+
+export const prepAllocAPI = {
+  summary: (woId)       => api.get(`/work-orders/${woId}/prep-allocation-summary`),
+  list:    (woId)       => api.get(`/prep-cost-allocations`, { params: { work_order_id: woId } }),
+  create:  (data)       => api.post(`/prep-cost-allocations`, data),
+  remove:  (allocId)    => api.delete(`/prep-cost-allocations/${allocId}`),
+};
+
+/* ======================
    WORK ORDER LIFECYCLE ACTIONS
 ====================== */
 

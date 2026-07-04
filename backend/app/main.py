@@ -88,8 +88,9 @@ def _print_db_banner():
 # FRONTEND_URL: comma-separated list of allowed frontend origins.
 # Set this in each Render service's env vars to its corresponding Vercel URL.
 # Example (production): FRONTEND_URL=https://nivodiya-farms.vercel.app
-# Example (branch):     FRONTEND_URL=https://nivodiya-farms-feat-variety-model.vercel.app
-# allow_origin_regex also covers any *.vercel.app preview URL automatically.
+# Example (branch):     FRONTEND_URL=https://website-m39m0cuok-nivodiyafarms-projects.vercel.app
+# allow_origin_regex covers every *.vercel.app preview/branch/team URL automatically.
+# Pattern: lowercase alphanumeric + hyphens subdomain (Vercel's slug alphabet).
 origins = [
     "http://localhost:3000",
     "http://localhost:3001",
@@ -108,7 +109,7 @@ for _url in os.getenv("FRONTEND_URL", "").split(","):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r"https://[a-z0-9][a-z0-9-]*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

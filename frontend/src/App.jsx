@@ -18,6 +18,7 @@ import WorkersPage from './pages/WorkersPage';
 import NewWorkerPage from './pages/NewWorkerPage';
 import ComingSoon from './pages/ComingSoon';
 import GeneralPurpose from './pages/GeneralPurpose';
+import PrepAllocPage from './pages/PrepAllocPage';
 import FarmMap from './pages/FarmMap';
 // Legacy pages — still reachable at their old URLs, not in primary nav
 import Dashboard from './pages/Dashboard';
@@ -51,6 +52,7 @@ function App() {
           <Route path="/fields/:field_id"                                   element={<Shell><FieldDetailPage /></Shell>} />
           <Route path="/fields/:field_id/prep/new"                         element={<Shell><NewPrepWOPage /></Shell>} />
           <Route path="/fields/:field_id/prep/:work_order_id/edit"         element={<Shell><NewPrepWOPage /></Shell>} />
+          <Route path="/fields/:field_id/prep/:work_order_id/allocate"     element={<Shell><PrepAllocPage /></Shell>} />
           <Route path="/workers"                   element={<Shell><WorkersPage /></Shell>} />
           <Route path="/workers/new"               element={<Shell><NewWorkerPage /></Shell>} />
           <Route path="/workers/:worker_id/edit"   element={<Shell><NewWorkerPage /></Shell>} />
