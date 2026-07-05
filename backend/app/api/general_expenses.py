@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List
+from typing import List, Optional
 from datetime import date
 from uuid import UUID
 
@@ -32,6 +32,8 @@ def _to_response(e: GeneralExpense) -> GeneralExpenseResponse:
         total_cost=float(e.total_cost) if e.total_cost is not None else None,
         review_status=e.review_status.value if e.review_status else "unreviewed",
         void_reason=e.void_reason,
+        payment_mode=e.payment_mode,
+        payment_mode_custom=e.payment_mode_custom,
         created_by=e.created_by,
         created_at=e.created_at,
     )
@@ -50,16 +52,28 @@ def _next_expense_no(db: Session) -> str:
     return f"GE{n:04d}"
 
 
+VALID_PAYMENT_MODES = {"firm_account", "cash", "personal_upi", "other"}
+
+
 @router.get("/", response_model=List[GeneralExpenseResponse])
 def get_general_expenses(
+    date_from:     Optional[date] = Query(None, description="Inclusive start date (expense.date)"),
+    date_to:       Optional[date] = Query(None, description="Inclusive end date (expense.date)"),
+    review_status: Optional[str]  = Query(None, description="unreviewed | verified | void"),
+    payment_mode:  Optional[str]  = Query(None, description="firm_account | cash | personal_upi | other"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    expenses = (
-        db.query(GeneralExpense)
-        .order_by(GeneralExpense.created_at.desc())
-        .all()
-    )
+    q = db.query(GeneralExpense)
+    if date_from:
+        q = q.filter(GeneralExpense.date >= date_from)
+    if date_to:
+        q = q.filter(GeneralExpense.date <= date_to)
+    if review_status and review_status in ("unreviewed", "verified", "void"):
+        q = q.filter(GeneralExpense.review_status == ExpenseReviewStatus(review_status))
+    if payment_mode and payment_mode in VALID_PAYMENT_MODES:
+        q = q.filter(GeneralExpense.payment_mode == payment_mode)
+    expenses = q.order_by(GeneralExpense.created_at.desc()).all()
     return [_to_response(e) for e in expenses]
 
 
@@ -94,6 +108,8 @@ def create_general_expense(
         unit=payload.unit,
         unit_rate=payload.unit_rate,
         total_cost=payload.total_cost,
+        payment_mode=payload.payment_mode,
+        payment_mode_custom=payload.payment_mode_custom,
         review_status=ExpenseReviewStatus.UNREVIEWED,
         created_by=None,  # TODO(auth-slice-6): set from current_user
     )

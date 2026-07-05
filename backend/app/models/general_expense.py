@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, Text, Numeric, Date, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Numeric, Date, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
 from sqlalchemy.orm import relationship
 
@@ -82,5 +82,9 @@ class GeneralExpense(Base):
         nullable=True,
     )
     void_reason = Column(Text, nullable=True)
+
+    # Payment mode: firm_account | cash | personal_upi | other
+    payment_mode = Column(String(50), nullable=True)
+    payment_mode_custom = Column(String(200), nullable=True)
 
     reviewer = relationship("Worker", foreign_keys=[reviewed_by])

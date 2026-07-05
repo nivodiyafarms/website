@@ -169,6 +169,11 @@ export default function PrepAllocPage() {
 
   const [summary,   setSummary]   = useState(null);  // { wo_cost, allocated_total, unallocated_remainder, allocations[] }
   const [allCycles, setAllCycles] = useState([]);
+  const [woMeta,    setWoMeta]    = useState(       // prep_season + prep_crop_year, from state or fallback fetch
+    prepWO
+      ? { prep_season: prepWO.prep_season, prep_crop_year: prepWO.prep_crop_year, work_order_number: prepWO.work_order_number }
+      : null
+  );
   const [loading,   setLoading]   = useState(true);
   const [inputs,    setInputs]    = useState({});    // { [cycleId]: string }
   const [saving,    setSaving]    = useState({});    // { [cycleId]: bool }
@@ -185,12 +190,28 @@ export default function PrepAllocPage() {
       setLoading(true);
       setError(null);
       try {
-        const [sumRes, cycRes] = await Promise.all([
+        const requests = [
           prepAllocAPI.summary(work_order_id),
           api.get('/crop-cycles/'),
-        ]);
-        setSummary(sumRes.data);
-        setAllCycles(cycRes.data ?? []);
+        ];
+        // Fallback: if no route state, fetch season/year from the field's prep-work list
+        if (!prepWO) {
+          requests.push(api.get(`/fields/${field_id}/prep-work`));
+        }
+        const results = await Promise.all(requests);
+        setSummary(results[0].data);
+        setAllCycles(results[1].data ?? []);
+        if (!prepWO) {
+          const wos = results[2].data?.work_orders ?? [];
+          const found = wos.find(w => w.work_order_id === work_order_id);
+          if (found) {
+            setWoMeta({
+              prep_season:        found.prep_season,
+              prep_crop_year:     found.prep_crop_year,
+              work_order_number:  found.work_order_number,
+            });
+          }
+        }
       } catch {
         setError('डेटा नहीं आया।');
       } finally {
@@ -198,11 +219,11 @@ export default function PrepAllocPage() {
       }
     }
     init();
-  }, [work_order_id]);
+  }, [work_order_id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Same-season filter: match prep WO's season+year
-  const woSeason = prepWO?.prep_season;
-  const woYear   = prepWO?.prep_crop_year;
+  const woSeason = woMeta?.prep_season;
+  const woYear   = woMeta?.prep_crop_year;
 
   const matchedCycles = allCycles.filter(c =>
     c.season === woSeason && c.crop_year === woYear
@@ -267,7 +288,7 @@ export default function PrepAllocPage() {
   );
 
   const seasonHindi = SEASONS[woSeason] ?? woSeason ?? '';
-  const woLabel = prepWO ? `${prepWO.work_order_number}` : work_order_id.slice(0, 8);
+  const woLabel = woMeta?.work_order_number ?? work_order_id.slice(0, 8);
 
   if (loading) {
     return (

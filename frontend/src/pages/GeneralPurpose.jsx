@@ -15,6 +15,8 @@ import {
   GE_CATEGORY_LABELS,
   GE_SUBCATEGORIES,
   GE_REVIEW_STATUS,
+  GE_PAYMENT_MODES,
+  GE_PAYMENT_BADGE,
   GE_STRINGS as S,
 } from '../strings/hi';
 
@@ -39,6 +41,18 @@ function ReviewBadge({ status }) {
   );
 }
 
+function PaymentBadge({ mode, customText }) {
+  if (!mode) return null;
+  const b = GE_PAYMENT_BADGE[mode];
+  if (!b) return null;
+  const label = mode === 'other' && customText ? customText : b.label;
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${b.color}`}>
+      {label}
+    </span>
+  );
+}
+
 // ── Add / Edit form ──────────────────────────────────────────────────────────
 
 function ExpenseForm({ initial, onSave, onCancel }) {
@@ -52,6 +66,8 @@ function ExpenseForm({ initial, onSave, onCancel }) {
   const [unit,        setUnit]        = useState(initial?.unit ?? '');
   const [unitRate,    setUnitRate]    = useState(initial?.unit_rate != null ? String(initial.unit_rate) : '');
   const [date,        setDate]        = useState(initial?.date ?? todayStr());
+  const [paymentMode, setPaymentMode] = useState(initial?.payment_mode ?? '');
+  const [paymentCustom, setPaymentCustom] = useState(initial?.payment_mode_custom ?? '');
   const [errors,      setErrors]      = useState({});
   const [saving,      setSaving]      = useState(false);
 
@@ -62,6 +78,8 @@ function ExpenseForm({ initial, onSave, onCancel }) {
     if (!category) e.category = S.errors.category;
     const n = parseFloat(amount);
     if (!amount || isNaN(n) || n <= 0) e.amount = S.errors.amount;
+    if (!paymentMode) e.paymentMode = 'भुगतान का तरीका चुनो';
+    if (paymentMode === 'other' && !paymentCustom.trim()) e.paymentCustom = 'तरीका लिखो';
     return e;
   }
 
@@ -78,6 +96,8 @@ function ExpenseForm({ initial, onSave, onCancel }) {
       unit:        unit.trim() || null,
       unit_rate:   unitRate ? parseFloat(unitRate) : null,
       date,
+      payment_mode:        paymentMode || null,
+      payment_mode_custom: paymentMode === 'other' ? paymentCustom.trim() || null : null,
     };
     try {
       if (isEdit) {
@@ -227,6 +247,49 @@ function ExpenseForm({ initial, onSave, onCancel }) {
               focus:outline-none focus:ring-2 focus:ring-green-500"
           />
         </div>
+
+        {/* भुगतान का तरीका */}
+        <div>
+          <FieldLabel text={S.paymentLabel} required />
+          <select
+            value={paymentMode}
+            onChange={e => {
+              setPaymentMode(e.target.value);
+              setPaymentCustom('');
+              setErrors(v => ({ ...v, paymentMode: undefined, paymentCustom: undefined }));
+            }}
+            className={`w-full border rounded-xl px-4 py-3 bg-white text-base
+              focus:outline-none focus:ring-2 focus:ring-green-500
+              ${errors.paymentMode ? 'border-red-400' : 'border-gray-300'}`}
+          >
+            <option value="">{S.paymentPlaceholder}</option>
+            {GE_PAYMENT_MODES.map(m => (
+              <option key={m.key} value={m.key}>
+                {m.label}{m.hint ? ` — ${m.hint}` : ''}
+              </option>
+            ))}
+          </select>
+          {errors.paymentMode && <p className="text-xs text-red-500 mt-1">{errors.paymentMode}</p>}
+        </div>
+
+        {paymentMode === 'other' && (
+          <div>
+            <FieldLabel text={S.paymentCustomLabel} required />
+            <input
+              type="text"
+              value={paymentCustom}
+              onChange={e => {
+                setPaymentCustom(e.target.value);
+                setErrors(v => ({ ...v, paymentCustom: undefined }));
+              }}
+              placeholder={S.paymentCustomPlaceholder}
+              className={`w-full border rounded-xl px-4 py-3 bg-white text-base
+                focus:outline-none focus:ring-2 focus:ring-green-500
+                ${errors.paymentCustom ? 'border-red-400' : 'border-gray-300'}`}
+            />
+            {errors.paymentCustom && <p className="text-xs text-red-500 mt-1">{errors.paymentCustom}</p>}
+          </div>
+        )}
 
         {errors.submit && (
           <p className="text-sm text-red-600">{errors.submit}</p>
@@ -401,13 +464,14 @@ function ExpenseRow({ expense, onUpdated, onDeleted }) {
             )}
           </div>
 
-          {/* Right: amount + date + badge */}
+          {/* Right: amount + date + badges */}
           <div className="text-right shrink-0">
             <p className="font-bold text-gray-900 text-base">{amtFmt}</p>
             {expense.date && (
               <p className="text-[11px] text-gray-400 mt-0.5">{expense.date}</p>
             )}
-            <div className="mt-1">
+            <div className="mt-1 flex items-center justify-end gap-1 flex-wrap">
+              <PaymentBadge mode={expense.payment_mode} customText={expense.payment_mode_custom} />
               <ReviewBadge status={statusKey} />
             </div>
           </div>
@@ -503,19 +567,166 @@ function ExpenseRow({ expense, onUpdated, onDeleted }) {
   );
 }
 
+// ── Filter helpers ───────────────────────────────────────────────────────────
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+/** Returns { date_from?, date_to? } for the given preset. */
+function buildDateParams(preset, dateFrom, dateTo) {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = today.getMonth() + 1; // 1-12
+
+  if (preset === 'this_month') {
+    const lastDay = new Date(y, m, 0).getDate();
+    return { date_from: `${y}-${pad2(m)}-01`, date_to: `${y}-${pad2(m)}-${lastDay}` };
+  }
+  if (preset === 'last_month') {
+    const lm = m === 1 ? 12 : m - 1;
+    const ly = m === 1 ? y - 1 : y;
+    const lastDay = new Date(ly, lm, 0).getDate();
+    return { date_from: `${ly}-${pad2(lm)}-01`, date_to: `${ly}-${pad2(lm)}-${lastDay}` };
+  }
+  if (preset === 'this_season') {
+    // Kharif: Jun 1 – Nov 30  |  Rabi: Dec 1 prev – May 31 current
+    if (m >= 6 && m <= 11) return { date_from: `${y}-06-01`,     date_to: `${y}-11-30` };
+    if (m === 12)           return { date_from: `${y}-12-01`,     date_to: `${y + 1}-05-31` };
+    /* m 1-5 = rabi that started last Dec */
+                            return { date_from: `${y - 1}-12-01`, date_to: `${y}-05-31` };
+  }
+  if (preset === 'custom') {
+    const p = {};
+    if (dateFrom) p.date_from = dateFrom;
+    if (dateTo)   p.date_to   = dateTo;
+    return p;
+  }
+  return {}; // 'all'
+}
+
+// ── Chip component ────────────────────────────────────────────────────────────
+
+function Chip({ label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all
+        ${active
+          ? 'bg-green-600 text-white shadow-sm'
+          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ── Filter bar ────────────────────────────────────────────────────────────────
+
+function FilterBar({ datePreset, setDatePreset, dateFrom, setDateFrom, dateTo, setDateTo,
+                     statusFilter, setStatusFilter, paymentFilter, setPaymentFilter }) {
+  const dateOpts = [
+    { key: 'all',         label: S.filterAll },
+    { key: 'this_month',  label: S.filterThisMonth },
+    { key: 'last_month',  label: S.filterLastMonth },
+    { key: 'this_season', label: S.filterThisSeason },
+    { key: 'custom',      label: S.filterCustom },
+  ];
+  const statusOpts = [
+    { key: 'all',        label: S.filterAll },
+    { key: 'unreviewed', label: GE_REVIEW_STATUS.unreviewed.label },
+    { key: 'verified',   label: GE_REVIEW_STATUS.verified.label },
+    { key: 'void',       label: GE_REVIEW_STATUS.void.label },
+  ];
+  const paymentOpts = [
+    { key: 'all', label: S.filterAll },
+    ...GE_PAYMENT_MODES.map(m => ({ key: m.key, label: m.label })),
+  ];
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-4 py-3 mb-4 space-y-3">
+
+      {/* Date row */}
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+          {S.filterDate}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {dateOpts.map(o => (
+            <Chip key={o.key} label={o.label} active={datePreset === o.key}
+              onClick={() => setDatePreset(o.key)} />
+          ))}
+        </div>
+        {datePreset === 'custom' && (
+          <div className="flex items-center gap-2 mt-2">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white
+                focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+            <span className="text-xs text-gray-400 shrink-0">{S.filterRangeSep}</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white
+                focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Status row */}
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+          {S.filterStatus}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {statusOpts.map(o => (
+            <Chip key={o.key} label={o.label} active={statusFilter === o.key}
+              onClick={() => setStatusFilter(o.key)} />
+          ))}
+        </div>
+      </div>
+
+      {/* Payment row */}
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+          {S.filterPayment}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {paymentOpts.map(o => (
+            <Chip key={o.key} label={o.label} active={paymentFilter === o.key}
+              onClick={() => setPaymentFilter(o.key)} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function GeneralPurpose() {
-  const [expenses, setExpenses] = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState(null);
-  const [showForm, setShowForm] = useState(false);
+  const [expenses,     setExpenses]     = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
+  const [showForm,     setShowForm]     = useState(false);
 
-  async function loadExpenses() {
+  // Filters
+  const [datePreset,    setDatePreset]    = useState('all');
+  const [dateFrom,      setDateFrom]      = useState('');
+  const [dateTo,        setDateTo]        = useState('');
+  const [statusFilter,  setStatusFilter]  = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
+
+  async function loadExpenses(params) {
     setLoading(true);
     setError(null);
     try {
-      const res = await generalExpenseAPI.list();
+      const res = await generalExpenseAPI.list(params);
       setExpenses(res.data ?? []);
     } catch {
       setError('खर्चों की सूची नहीं आई।');
@@ -524,7 +735,12 @@ export default function GeneralPurpose() {
     }
   }
 
-  useEffect(() => { loadExpenses(); }, []);
+  useEffect(() => {
+    const params = { ...buildDateParams(datePreset, dateFrom, dateTo) };
+    if (statusFilter  !== 'all') params.review_status = statusFilter;
+    if (paymentFilter !== 'all') params.payment_mode  = paymentFilter;
+    loadExpenses(params);
+  }, [datePreset, dateFrom, dateTo, statusFilter, paymentFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleCreated(newExp) {
     setExpenses(prev => [newExp, ...prev]);
@@ -553,7 +769,7 @@ export default function GeneralPurpose() {
       <BreadcrumbNav items={[{ label: S.heading }]} />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{S.heading}</h1>
           {!loading && expenses.length > 0 && (
@@ -570,6 +786,15 @@ export default function GeneralPurpose() {
           {S.addExpense}
         </button>
       </div>
+
+      {/* Filter bar */}
+      <FilterBar
+        datePreset={datePreset}     setDatePreset={setDatePreset}
+        dateFrom={dateFrom}         setDateFrom={setDateFrom}
+        dateTo={dateTo}             setDateTo={setDateTo}
+        statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+        paymentFilter={paymentFilter} setPaymentFilter={setPaymentFilter}
+      />
 
       {/* Inline add form */}
       {showForm && (

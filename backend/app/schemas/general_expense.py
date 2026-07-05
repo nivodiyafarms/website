@@ -4,6 +4,9 @@ from datetime import date as date_type, datetime
 from uuid import UUID
 
 
+VALID_PAYMENT_MODES = {"firm_account", "cash", "personal_upi", "other"}
+
+
 class GeneralExpenseCreate(BaseModel):
     category: str
     subcategory: Optional[str] = None
@@ -13,6 +16,8 @@ class GeneralExpenseCreate(BaseModel):
     unit: Optional[str] = None
     unit_rate: Optional[float] = None
     total_cost: float  # required; zero rejected server-side
+    payment_mode: Optional[str] = None
+    payment_mode_custom: Optional[str] = None
 
 
 class GeneralExpenseUpdate(BaseModel):
@@ -24,6 +29,8 @@ class GeneralExpenseUpdate(BaseModel):
     unit: Optional[str] = None
     unit_rate: Optional[float] = None
     total_cost: Optional[float] = None
+    payment_mode: Optional[str] = None
+    payment_mode_custom: Optional[str] = None
 
 
 class GeneralExpenseResponse(BaseModel):
@@ -39,6 +46,8 @@ class GeneralExpenseResponse(BaseModel):
     total_cost: Optional[float] = None
     review_status: Optional[str] = None
     void_reason: Optional[str] = None
+    payment_mode: Optional[str] = None
+    payment_mode_custom: Optional[str] = None
     created_by: Optional[UUID] = None
     created_at: Optional[datetime] = None
 

@@ -553,9 +553,10 @@ export const SEED_CLASS_OPTIONS = [
   { value: 'other',       label: 'अन्य' },
 ];
 export const SEED_STAGE_OPTIONS = [
-  { value: 'graded', label: 'Graded (ग्रेडेड)' },
-  { value: 'raw',    label: 'Raw (कच्चा)' },
-  { value: 'other',  label: 'अन्य' },
+  { value: 'graded',   label: 'Graded (ग्रेडेड)' },
+  { value: 'raw',      label: 'Raw (कच्चा)' },
+  { value: 'treated',  label: 'Treated (उपचारित)' },
+  { value: 'other',    label: 'अन्य' },
 ];
 
 export const NEW_CYCLE = {
@@ -648,6 +649,22 @@ export const GE_REVIEW_STATUS = {
   void:       { label: 'रद्द',     color: 'bg-red-100    text-red-800'    },
 };
 
+// Payment mode: values match backend / DB
+export const GE_PAYMENT_MODES = [
+  { key: 'firm_account',  label: 'फर्म खाता',        hint: 'online / UPI / NEFT' },
+  { key: 'cash',          label: 'नकद',               hint: 'cash'                },
+  { key: 'personal_upi',  label: 'personal UPI/बैंक', hint: ''                    },
+  { key: 'other',         label: 'अन्य',              hint: ''                    },
+];
+
+// Badge appearance per payment mode key
+export const GE_PAYMENT_BADGE = {
+  firm_account:  { label: 'फर्म खाता',        color: 'bg-green-100 text-green-800'   },
+  cash:          { label: 'नकद',               color: 'bg-amber-100 text-amber-800'   },
+  personal_upi:  { label: 'personal UPI/बैंक', color: 'bg-orange-100 text-orange-800' },
+  other:         { label: 'अन्य',              color: 'bg-gray-100   text-gray-600'   },
+};
+
 export const GE_STRINGS = {
   heading:          'सामान्य खर्चे',
   addExpense:       '+ खर्चा जोड़ो',
@@ -686,6 +703,21 @@ export const GE_STRINGS = {
   deleteConfirm:    'यह खर्चा हटाना है?',
   deleteYes:        'हाँ, हटाओ',
   deleteNo:         'रहने दो',
+  // form — payment
+  paymentLabel:         'भुगतान का तरीका',
+  paymentPlaceholder:   '— तरीका चुनो —',
+  paymentCustomLabel:   'और बताओ',
+  paymentCustomPlaceholder: 'भुगतान का तरीका लिखो…',
+  // filters
+  filterDate:       'तारीख',
+  filterStatus:     'स्थिति',
+  filterPayment:    'भुगतान',
+  filterAll:        'सब',
+  filterThisMonth:  'इस महीने',
+  filterLastMonth:  'पिछला महीना',
+  filterThisSeason: 'इस सीज़न',
+  filterCustom:     'कस्टम',
+  filterRangeSep:   '—',
   // errors
   errors: {
     category: 'श्रेणी चुनो',

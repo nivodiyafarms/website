@@ -158,7 +158,7 @@ export const workersAPI = {
 ====================== */
 
 export const generalExpenseAPI = {
-  list:   ()           => api.get("/general-expenses/"),
+  list:   (params = {}) => api.get("/general-expenses/", { params }),
   create: (data)       => api.post("/general-expenses/", data),
   update: (id, data)   => api.put(`/general-expenses/${id}`, data),
   delete: (id)         => api.delete(`/general-expenses/${id}`),
